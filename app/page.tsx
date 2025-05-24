@@ -34,7 +34,7 @@ export default function LandingPage() {
             </div>
             <div className="flex justify-center lg:justify-end">
               <Image
-                src="/placeholder.svg.png?height=500&width=500"
+                src="/placeholder.png?height=500&width=500"
                 alt="PochiYangu App Screenshot"
                 width={500}
                 height={500}
