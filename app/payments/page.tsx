@@ -67,11 +67,11 @@ export default function PaymentsPage() {
       try {
         const [userData, transactionsData] = await Promise.all([
           getCurrentUser(),
-          fetchTransactions(),
+          fetchTransactions().catch(() => []), // Fallback to empty array if request fails
         ]);
         
-        setUser(userData);
-        setTransactions(transactionsData);
+        setUser(userData ?? null);
+        setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
       } catch (error) {
         console.error("Failed to fetch payments data:", error);
         toast({
@@ -79,6 +79,8 @@ export default function PaymentsPage() {
           description: "Failed to load payments data. Please try again.",
           variant: "destructive",
         });
+        setTransactions([]);
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -88,7 +90,14 @@ export default function PaymentsPage() {
   }, [toast]);
 
   async function onSubmit(values: z.infer<typeof sendMoneySchema>) {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "User information not available. Please refresh the page.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     // Check for sufficient balance
     if (values.amount > user.balance) {
@@ -111,8 +120,8 @@ export default function PaymentsPage() {
       
       // Refresh data
       const [updatedUser, updatedTransactions] = await Promise.all([
-        getCurrentUser(),
-        fetchTransactions(),
+        getCurrentUser().catch(() => null),
+        fetchTransactions().catch(() => []),
       ]);
       
       setUser(updatedUser);
@@ -131,14 +140,20 @@ export default function PaymentsPage() {
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    try {
+      const date = new Date(dateString);
+      return isNaN(date.getTime()) 
+        ? "Unknown date" 
+        : date.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+    } catch {
+      return "Unknown date";
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -252,7 +267,7 @@ export default function PaymentsPage() {
                   )}
                 />
 
-                <Button type="submit" className="w-full" disabled={isSending}>
+                <Button type="submit" className="w-full" disabled={isSending || !user}>
                   {isSending ? (
                     <>
                       <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -296,10 +311,10 @@ export default function PaymentsPage() {
                         )}
                       </div>
                       <div>
-                        <p className="font-medium">{transaction.description}</p>
+                        <p className="font-medium">{transaction.description || "No description"}</p>
                         <p className="text-sm text-gray-500">
                           {transaction.type === 'send' ? 'To: ' : 'From: '} 
-                          {transaction.counterparty}
+                          {transaction.counterparty || "Unknown"}
                         </p>
                         <p className="text-xs text-gray-400 mt-1">{formatDate(transaction.createdAt)}</p>
                       </div>
@@ -315,7 +330,7 @@ export default function PaymentsPage() {
                             ? 'bg-yellow-100 text-yellow-800' 
                             : 'bg-red-100 text-red-800'
                       }`}>
-                        {transaction.status}
+                        {transaction.status || 'unknown'}
                       </span>
                     </div>
                   </div>
