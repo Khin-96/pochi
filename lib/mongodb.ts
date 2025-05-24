@@ -1,67 +1,94 @@
-import { MongoClient, ServerApiVersion } from "mongodb";
+import { MongoClient, ServerApiVersion } from 'mongodb';
 
-if (!process.env.MONGODB_URI) {
-  throw new Error('Invalid/Missing environment variable: "MONGODB_URI"');
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
+console.log('TLS/SSL Environment Info:', {
+  nodeVersion: process.version,
+  opensslVersion: process.versions.openssl,
+  platform: process.platform
+});
+
+const uri = validateAndEnhanceConnectionString(process.env.MONGODB_URI!);
+
+if (!uri) {
+  throw new Error('❌ MONGODB_URI environment variable is not defined.');
 }
 
-const isDevelopment = process.env.NODE_ENV === "development";
-const isProduction = process.env.NODE_ENV === "production";
-const isTest = process.env.NODE_ENV === "test";
-
-// Modify connection string based on environment
-let connectionString = process.env.MONGODB_URI;
-
-// For local development, ensure we're using the correct protocol
-if (isDevelopment && connectionString.includes('mongodb+srv://')) {
-  connectionString = connectionString.replace('mongodb+srv://', 'mongodb://');
-}
-
-const options = {
+const atlasOptions = {
   serverApi: {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
   },
-  // SSL/TLS configuration
-  tls: isProduction, // Enable TLS only in production
-  tlsInsecure: isDevelopment, // Allow insecure TLS in development
-  tlsAllowInvalidCertificates: isDevelopment, // Allow invalid certs in development
-  retryWrites: true,
-  w: 'majority',
-  // Connection pool options
-  maxPoolSize: isDevelopment ? 10 : 50,
-  minPoolSize: isDevelopment ? 1 : 5,
+  tls: true,
+  minTLSVersion: 'TLSv1.2',
+  tlsAllowInvalidCertificates: false,
+  tlsAllowInvalidHostnames: false,
+
+  maxPoolSize: 50,
+  minPoolSize: 5,
   connectTimeoutMS: 30000,
   socketTimeoutMS: 45000,
-  // Server selection timeout
-  serverSelectionTimeoutMS: 5000,
+  serverSelectionTimeoutMS: 30000,
+
+  retryWrites: true,
+  retryReads: true,
 };
 
-let client: MongoClient;
+const client = new MongoClient(uri, atlasOptions);
+
 let clientPromise: Promise<MongoClient>;
 
-if (isDevelopment) {
-  // In development mode, use a global variable to preserve connection across HMR
-  const globalWithMongo = global as typeof globalThis & {
-    _mongoClientPromise?: Promise<MongoClient>;
-  };
+clientPromise = client.connect()
+  .then(async (connectedClient) => {
+    console.log('✅ MongoDB connected successfully');
 
-  if (!globalWithMongo._mongoClientPromise) {
-    client = new MongoClient(connectionString, options);
-    globalWithMongo._mongoClientPromise = client.connect().catch(err => {
-      console.error('MongoDB connection error:', err);
-      throw err;
+    try {
+      const admin = connectedClient.db().admin();
+      const serverStatus = await admin.serverStatus();
+      console.log('🔐 TLS Connection Info:', {
+        version: serverStatus.version,
+        tlsSupported: true,
+        tlsVersion: serverStatus.openssl?.version || 'unknown'
+      });
+    } catch (sslError) {
+      console.error('⚠️ TLS verification failed:', sslError);
+      throw new Error('TLS handshake failed with MongoDB Atlas');
+    }
+
+    return connectedClient;
+  })
+  .catch(err => {
+    console.error('❌ MongoDB connection failed:', {
+      message: err.message,
+      code: err.code,
+      stack: isDevelopment ? err.stack : undefined
     });
-  }
-  clientPromise = globalWithMongo._mongoClientPromise;
-} else {
-  // In production/test mode, create new connection
-  client = new MongoClient(connectionString, options);
-  clientPromise = client.connect().catch(err => {
-    console.error('MongoDB connection error:', err);
+
+    if (err.message.includes('SSL') || err.message.includes('TLS')) {
+      console.error('🔐 TLS Connection Troubleshooting:');
+      console.error('1. Ensure your network allows outbound TLS 1.2+ connections');
+      console.error('2. Verify your MongoDB Atlas IP whitelist includes your current IP');
+      console.error('3. Try updating your Node.js version (current:', process.version, ')');
+      console.error('4. Check your system time - incorrect time can cause TLS failures');
+    }
+
     throw err;
   });
+
+function validateAndEnhanceConnectionString(uri: string): string {
+  try {
+    const url = new URL(uri);
+    url.searchParams.set('tls', 'true');
+    url.searchParams.set('retryWrites', 'true');
+    url.searchParams.set('w', 'majority');
+    url.searchParams.delete('ssl');
+    url.searchParams.delete('sslValidate');
+    return url.toString();
+  } catch (error) {
+    console.error('Invalid MongoDB URI format:', error);
+    return uri;
+  }
 }
 
-// Export the module-scoped MongoClient promise
 export default clientPromise;
