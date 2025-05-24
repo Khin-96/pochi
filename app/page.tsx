@@ -82,14 +82,14 @@ export default function LandingPage() {
               </p>
             </div>
 
-            {/* Testing Balance Feature */}
+            {/* Send Money */}
             <div className="flex flex-col items-center space-y-2 border rounded-lg p-6 shadow-sm">
               <div className="p-2 bg-green-100 rounded-full dark:bg-green-900">
                 <Wallet className="h-10 w-10 text-green-600 dark:text-green-400" />
               </div>
-              <h3 className="text-xl font-bold">Testing Balance</h3>
+              <h3 className="text-xl font-bold">Send Money</h3>
               <p className="text-sm text-center text-muted-foreground">
-                New users receive 1,000 KES testing balance to safely explore features without risking real money.
+                users can send money to other users, and track their spending habits with ease.
               </p>
             </div>
           </div>
