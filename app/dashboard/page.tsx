@@ -87,7 +87,7 @@ export default function DashboardPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back, {data.user.name}</p>
+          <p className="text-muted-foreground">Welcome back, {data?.user?.name ?? 'User'}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button asChild variant="outline">
@@ -110,7 +110,9 @@ export default function DashboardPage() {
             <CardTitle className="text-sm font-medium">Available Balance</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data.wallet.balance, data.wallet.currency)}</div>
+            <div className="text-2xl font-bold">
+              {formatCurrency(data?.wallet?.balance ?? 0, data?.wallet?.currency ?? 'KES')}
+            </div>
             <p className="text-xs text-muted-foreground">Your actual balance</p>
           </CardContent>
         </Card>
@@ -128,7 +130,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {formatCurrency(data.wallet.testingBalance, data.wallet.currency)}
+              {formatCurrency(data?.wallet?.testingBalance ?? 0, data?.wallet?.currency ?? 'KES')}
             </div>
             <p className="text-xs text-muted-foreground">For testing features (cannot be withdrawn)</p>
           </CardContent>
@@ -173,7 +175,7 @@ export default function DashboardPage() {
             </Button>
           </div>
 
-          {data.chamas.length === 0 ? (
+          {(data?.chamas ?? []).length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center p-6 text-center">
                 <Users className="h-12 w-12 text-muted-foreground mb-4" />
@@ -188,7 +190,7 @@ export default function DashboardPage() {
             </Card>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
-              {data.chamas.slice(0, 4).map((chama) => (
+              {(data?.chamas ?? []).slice(0, 4).map((chama) => (
                 <ChamaCard key={chama.id} chama={chama} />
               ))}
             </div>
@@ -208,7 +210,10 @@ export default function DashboardPage() {
 
             <Card>
               <CardContent className="p-0">
-                <TransactionList transactions={data.transactions.slice(0, 5)} currency={data.wallet.currency} />
+                <TransactionList 
+                  transactions={(data?.transactions ?? []).slice(0, 5)} 
+                  currency={data?.wallet?.currency ?? 'KES'} 
+                />
               </CardContent>
             </Card>
           </div>
@@ -227,7 +232,7 @@ export default function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                {data.insights.map((insight, index) => (
+                {(data?.insights ?? []).map((insight, index) => (
                   <div key={index} className="text-sm p-2 rounded-lg bg-muted">
                     {insight.message}
                   </div>
