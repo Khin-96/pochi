@@ -112,7 +112,6 @@ export async function fetchDashboardData() {
     user,
     wallet: {
       balance: user.balance,
-      testingBalance: user.testingBalance,
       currency: "KES",
     },
     chamas: chamasData.chamas,
@@ -186,6 +185,16 @@ export async function fetchChamaDetails(chamaId: string) {
 }
 
 export async function contributeToChama(chamaId: string, amount: number) {
+  // Check user balance before making the request
+  const user = await getCurrentUser()
+  if (!user) {
+    throw new Error("Not authenticated")
+  }
+  
+  if (user.balance < amount) {
+    throw new Error("Insufficient balance for this contribution")
+  }
+
   const response = await fetch(`/api/chamas/${chamaId}/contribute`, {
     method: "POST",
     headers: {
@@ -458,7 +467,17 @@ export async function createSavingsGoal(goalData: any) {
   return response.json().then((data) => data.goal)
 }
 
-export async function contributeToDavingsGoal(goalId: string, amount: number) {
+export async function contributeToSavingsGoal(goalId: string, amount: number) {
+  // Check user balance before making the request
+  const user = await getCurrentUser()
+  if (!user) {
+    throw new Error("Not authenticated")
+  }
+  
+  if (user.balance < amount) {
+    throw new Error("Insufficient balance for this contribution")
+  }
+
   const response = await fetch(`/api/savings/${goalId}/contribute`, {
     method: "POST",
     headers: {
@@ -505,6 +524,16 @@ export async function requestLoan(loanData: any) {
 }
 
 export async function repayLoan(loanId: string, amount: number) {
+  // Check user balance before making the request
+  const user = await getCurrentUser()
+  if (!user) {
+    throw new Error("Not authenticated")
+  }
+  
+  if (user.balance < amount) {
+    throw new Error("Insufficient balance for loan repayment")
+  }
+
   const response = await fetch(`/api/loans/${loanId}/repay`, {
     method: "POST",
     headers: {
@@ -534,6 +563,16 @@ export async function fetchInvestments() {
 }
 
 export async function createInvestment(investmentData: any) {
+  // Check user balance before making the request
+  const user = await getCurrentUser()
+  if (!user) {
+    throw new Error("Not authenticated")
+  }
+  
+  if (user.balance < investmentData.amount) {
+    throw new Error("Insufficient balance for this investment")
+  }
+
   const response = await fetch("/api/investments", {
     method: "POST",
     headers: {
@@ -552,6 +591,16 @@ export async function createInvestment(investmentData: any) {
 
 // Payments functions
 export async function sendMoney(recipientPhone: string, amount: number, description: string) {
+  // Check user balance before making the request
+  const user = await getCurrentUser()
+  if (!user) {
+    throw new Error("Not authenticated")
+  }
+  
+  if (user.balance < amount) {
+    throw new Error("Insufficient balance for this transaction")
+  }
+
   const response = await fetch("/api/payments/send", {
     method: "POST",
     headers: {

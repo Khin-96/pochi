@@ -107,34 +107,18 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Available Balance</CardTitle>
+            <CardTitle className="text-sm font-medium">Balance</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {formatCurrency(data?.wallet?.balance ?? 0, data?.wallet?.currency ?? 'KES')}
             </div>
-            <p className="text-xs text-muted-foreground">Your actual balance</p>
-          </CardContent>
-        </Card>
-        <Card className="border-dashed border-green-200 dark:border-green-800">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
-              Testing Balance
-              <Badge
-                variant="outline"
-                className="ml-2 bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300"
-              >
-                Test Only
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {formatCurrency(data?.wallet?.testingBalance ?? 0, data?.wallet?.currency ?? 'KES')}
+            <div className="text-sm text-muted-foreground">
+              Test balance: {formatCurrency(data?.wallet?.testingBalance ?? 0, data?.wallet?.currency ?? 'KES')}
             </div>
-            <p className="text-xs text-muted-foreground">For testing features (cannot be withdrawn)</p>
           </CardContent>
         </Card>
+        
         <Card className="md:col-span-2 lg:col-span-1">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Quick Actions</CardTitle>
@@ -218,35 +202,7 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* PesaBot Insights */}
-          <div>
-            <h2 className="text-xl font-semibold mb-4">PesaBot Insights</h2>
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center">
-                  <Avatar className="h-8 w-8 mr-2">
-                    <AvatarImage src="/placeholder.svg?height=32&width=32" alt="PesaBot" />
-                    <AvatarFallback>PB</AvatarFallback>
-                  </Avatar>
-                  <CardTitle className="text-base font-medium">PesaBot</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {(data?.insights ?? []).map((insight, index) => (
-                  <div key={index} className="text-sm p-2 rounded-lg bg-muted">
-                    {insight.message}
-                  </div>
-                ))}
-              </CardContent>
-              <CardFooter>
-                <Button variant="ghost" size="sm" className="w-full" asChild>
-                  <Link href="/support">
-                    <Bot className="mr-2 h-4 w-4" /> Chat with PesaBot
-                  </Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
+          {/* PesaBot Insights - Removed */}
         </div>
       </div>
     </div>

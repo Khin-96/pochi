@@ -15,11 +15,11 @@ const COLLECTIONS = {
   LOANS: "loans",
   SAVINGS_GOALS: "savings_goals",
   INVESTMENTS: "investments",
-  PESABOT_CHATS: "pesabot_chats", // Added new collection for PesaBot chats
+  PESABOT_CHATS: "pesabot_chats",
 }
 
 // User functions
-export async function createUser(userData: Omit<User, "_id" | "createdAt" | "balance" | "testingBalance">) {
+export async function createUser(userData: Omit<User, "_id" | "createdAt" | "balance">) {
   const client = await clientPromise
   const db = client.db(DB_NAME)
 
@@ -36,8 +36,7 @@ export async function createUser(userData: Omit<User, "_id" | "createdAt" | "bal
     ...userData,
     password: hashedPassword,
     createdAt: new Date(),
-    balance: 0,
-    testingBalance: 1000, // New users get 1000 KES testing balance
+    balance: 1000, // Single balance field with initial 1000 KES
   }
 
   const result = await db.collection(COLLECTIONS.USERS).insertOne(newUser)
@@ -68,22 +67,20 @@ export async function verifyUserCredentials(email: string, password: string) {
   return userWithoutPassword
 }
 
-export async function updateUserBalance(userId: string, amount: number, isTestBalance = false) {
+export async function updateUserBalance(userId: string, amount: number) {
   const client = await clientPromise
   const db = client.db(DB_NAME)
 
-  const updateField = isTestBalance ? "testingBalance" : "balance"
-
   const result = await db
     .collection(COLLECTIONS.USERS)
-    .updateOne({ _id: new ObjectId(userId) }, { $inc: { [updateField]: amount } })
+    .updateOne({ _id: new ObjectId(userId) }, { $inc: { balance: amount } })
 
   return result.modifiedCount > 0
 }
 
 // Chama functions
 export async function createChama(
-  chamaData: Omit<Chama, "_id" | "createdAt" | "memberCount" | "balance" | "testBalance" | "members">,
+  chamaData: Omit<Chama, "_id" | "createdAt" | "memberCount" | "balance" | "members">,
   userId: string,
   userName: string,
 ) {
@@ -95,7 +92,6 @@ export async function createChama(
     createdAt: new Date(),
     memberCount: 1,
     balance: 0,
-    testBalance: 0,
     createdBy: userId,
     members: [
       {

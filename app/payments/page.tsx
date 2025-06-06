@@ -13,7 +13,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// Type definitions
 type Transaction = {
   id: string;
   amount: number;
@@ -31,15 +30,20 @@ type User = {
   balance: number;
 };
 
-// Validation schema
 const sendMoneySchema = z.object({
   recipientPhone: z.string()
     .min(10, { message: "Phone number must be at least 10 digits." })
     .max(15, { message: "Phone number too long." })
     .regex(/^[0-9]+$/, { message: "Phone number must contain only digits." }),
-  amount: z.coerce.number()
-    .min(50, { message: "Minimum amount is 50 KES." })
-    .max(50000, { message: "Maximum amount is 50,000 KES." }),
+  amount: z.string()
+    .min(1, { message: "Amount is required." })
+    .transform((val) => {
+      const num = parseFloat(val);
+      if (isNaN(num)) throw new Error("Invalid amount");
+      return num;
+    })
+    .refine((val) => val >= 50, { message: "Minimum amount is 50 KES." })
+    .refine((val) => val <= 50000, { message: "Maximum amount is 50,000 KES." }),
   description: z.string()
     .min(3, { message: "Description must be at least 3 characters." })
     .max(100, { message: "Description too long." }),
@@ -56,7 +60,7 @@ export default function PaymentsPage() {
     resolver: zodResolver(sendMoneySchema),
     defaultValues: {
       recipientPhone: "",
-      amount: 0,
+      amount: "",
       description: "",
     },
   });
@@ -67,9 +71,13 @@ export default function PaymentsPage() {
       try {
         const [userData, transactionsData] = await Promise.all([
           getCurrentUser(),
-          fetchTransactions().catch(() => []), // Fallback to empty array if request fails
+          fetchTransactions().catch(() => []),
         ]);
-        
+
+        if (userData && userData.balance) {
+          userData.balance = Number(userData.balance);
+        }
+
         setUser(userData ?? null);
         setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
       } catch (error) {
@@ -79,8 +87,8 @@ export default function PaymentsPage() {
           description: "Failed to load payments data. Please try again.",
           variant: "destructive",
         });
-        setTransactions([]);
         setUser(null);
+        setTransactions([]);
       } finally {
         setIsLoading(false);
       }
@@ -90,43 +98,42 @@ export default function PaymentsPage() {
   }, [toast]);
 
   async function onSubmit(values: z.infer<typeof sendMoneySchema>) {
-    if (!user) {
-      toast({
-        title: "Error",
-        description: "User information not available. Please refresh the page.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Check for sufficient balance
-    if (values.amount > user.balance) {
-      toast({
-        title: "Insufficient Funds",
-        description: "You don't have enough balance for this transaction",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsSending(true);
+
     try {
-      await sendMoney(values.recipientPhone, values.amount, values.description);
+      const freshUser = await getCurrentUser();
+      const freshBalance = Number(freshUser?.balance ?? 0);
+      const requestedAmount = Number(values.amount);
+
+      if (requestedAmount > freshBalance) {
+        toast({
+          title: "Insufficient Funds",
+          description: `You only have ${formatCurrency(freshBalance)} available.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await sendMoney(values.recipientPhone, requestedAmount, values.description);
 
       toast({
         title: "Success",
-        description: `KES ${values.amount} sent successfully to ${values.recipientPhone}`,
+        description: `${formatCurrency(requestedAmount)} sent successfully to ${values.recipientPhone}`,
       });
-      
-      // Refresh data
+
       const [updatedUser, updatedTransactions] = await Promise.all([
         getCurrentUser().catch(() => null),
         fetchTransactions().catch(() => []),
       ]);
-      
+
+      if (updatedUser && updatedUser.balance) {
+        updatedUser.balance = Number(updatedUser.balance);
+      }
+
       setUser(updatedUser);
-      setTransactions(updatedTransactions);
+      setTransactions(Array.isArray(updatedTransactions) ? updatedTransactions : []);
       form.reset();
+
     } catch (error: any) {
       console.error("Failed to send money:", error);
       toast({
@@ -142,8 +149,8 @@ export default function PaymentsPage() {
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
-      return isNaN(date.getTime()) 
-        ? "Unknown date" 
+      return isNaN(date.getTime())
+        ? "Unknown date"
         : date.toLocaleDateString("en-US", {
             month: "short",
             day: "numeric",
@@ -162,6 +169,18 @@ export default function PaymentsPage() {
       currency: "KES",
       minimumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const refreshUserData = async () => {
+    try {
+      const userData = await getCurrentUser();
+      if (userData && userData.balance) {
+        userData.balance = Number(userData.balance);
+      }
+      setUser(userData);
+    } catch (error) {
+      console.error("Failed to refresh user data:", error);
+    }
   };
 
   if (isLoading) {
@@ -209,13 +228,18 @@ export default function PaymentsPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Payments</h1>
         {user && (
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-500">Balance:</span>
-            <span className="font-semibold">{formatCurrency(user.balance)}</span>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-500">Balance:</span>
+              <span className="font-semibold text-lg">{formatCurrency(Number(user.balance))}</span>
+            </div>
+            <Button variant="outline" size="sm" onClick={refreshUserData}>
+              Refresh
+            </Button>
           </div>
         )}
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Send Money Form */}
         <Card>
@@ -246,9 +270,21 @@ export default function PaymentsPage() {
                     <FormItem>
                       <FormLabel>Amount (KES)</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="500" {...field} />
+                        <Input
+                          type="number"
+                          placeholder="500"
+                          min="50"
+                          max="50000"
+                          step="1"
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
+                      {user && (
+                        <p className="text-sm text-gray-500">
+                          Available balance: {formatCurrency(Number(user.balance))}
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />
@@ -260,7 +296,7 @@ export default function PaymentsPage() {
                     <FormItem>
                       <FormLabel>Description</FormLabel>
                       <FormControl>
-                        <Textarea placeholder="For groceries" {...field} />
+                        <Textarea placeholder="For groceries" {...field} maxLength={100} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -313,7 +349,7 @@ export default function PaymentsPage() {
                       <div>
                         <p className="font-medium">{transaction.description || "No description"}</p>
                         <p className="text-sm text-gray-500">
-                          {transaction.type === 'send' ? 'To: ' : 'From: '} 
+                          {transaction.type === 'send' ? 'To: ' : 'From: '}
                           {transaction.counterparty || "Unknown"}
                         </p>
                         <p className="text-xs text-gray-400 mt-1">{formatDate(transaction.createdAt)}</p>
@@ -324,10 +360,10 @@ export default function PaymentsPage() {
                         {transaction.type === 'send' ? '-' : '+'}{formatCurrency(transaction.amount)}
                       </p>
                       <span className={`text-xs px-2 py-1 rounded-full ${
-                        transaction.status === 'completed' 
-                          ? 'bg-green-100 text-green-800' 
-                          : transaction.status === 'pending' 
-                            ? 'bg-yellow-100 text-yellow-800' 
+                        transaction.status === 'completed'
+                          ? 'bg-green-100 text-green-800'
+                          : transaction.status === 'pending'
+                            ? 'bg-yellow-100 text-yellow-800'
                             : 'bg-red-100 text-red-800'
                       }`}>
                         {transaction.status || 'unknown'}
