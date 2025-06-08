@@ -7,7 +7,8 @@ import { formatCurrency } from "@/lib/utils"
 
 interface ChamaCardProps {
   chama: {
-    id: string
+    id?: string
+    _id?: string
     name: string
     type: "private" | "public"
     memberCount: number
@@ -22,6 +23,9 @@ interface ChamaCardProps {
 }
 
 export default function ChamaCard({ chama }: ChamaCardProps) {
+  // Handle both id and _id fields that might come from different API responses
+  const chamaId = chama.id || chama._id
+  
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -68,12 +72,19 @@ export default function ChamaCard({ chama }: ChamaCardProps) {
         )}
       </CardContent>
       <CardFooter>
-        <Button asChild className="w-full bg-green-600 hover:bg-green-700">
-          <Link href={`/chama/${chama.id}`}>
-            View Details <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
-        </Button>
+        {chamaId ? (
+          <Button asChild className="w-full bg-green-600 hover:bg-green-700">
+            <Link href={`/chama/${chamaId}`}>
+              View Details <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        ) : (
+          <Button disabled className="w-full bg-gray-400">
+            Invalid Chama ID
+          </Button>
+        )}
       </CardFooter>
     </Card>
   )
 }
+

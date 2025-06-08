@@ -26,78 +26,12 @@ import {
   CheckCircle,
   AlertCircle
 } from "lucide-react"
-
-// Mock data - would be replaced with actual API calls
-const mockUserData = {
-  profile: {
-    id: "user-001",
-    name: "John Kamau",
-    email: "john.kamau@example.com",
-    phone: "+254 712 345 678",
-    avatar: "/placeholder.svg",
-    location: "Nairobi, Kenya",
-    joinDate: "2023-09-15",
-    verificationStatus: "verified",
-    bio: "Passionate about community savings and investments. Active member of multiple chamas.",
-  },
-  stats: {
-    chamasJoined: 3,
-    totalSavings: 45000,
-    totalInvestments: 75000,
-    activeLoans: 1,
-    currency: "KES",
-  },
-  notifications: {
-    email: true,
-    push: true,
-    sms: false,
-    marketing: false,
-    chamaUpdates: true,
-    transactionAlerts: true,
-    investmentUpdates: true,
-    loanReminders: true,
-  },
-  security: {
-    twoFactorEnabled: true,
-    lastPasswordChange: "2024-03-10",
-    loginAlerts: true,
-    transactionPinEnabled: true,
-    biometricEnabled: false,
-  },
-  paymentMethods: [
-    {
-      id: "pm-001",
-      type: "M-Pesa",
-      number: "******6789",
-      isDefault: true,
-    },
-    {
-      id: "pm-002",
-      type: "Bank Account",
-      number: "****5432",
-      bank: "Equity Bank",
-      isDefault: false,
-    }
-  ],
-  verificationDocuments: [
-    {
-      type: "ID Card",
-      status: "verified",
-      dateSubmitted: "2023-09-15",
-      dateVerified: "2023-09-17",
-    },
-    {
-      type: "Proof of Address",
-      status: "verified",
-      dateSubmitted: "2023-09-15",
-      dateVerified: "2023-09-18",
-    }
-  ]
-}
+import { useToast } from "@/hooks/use-toast"
+import { fetchUserProfile, updateUserProfile, updateNotificationPreferences, updateSecuritySettings, logout } from "@/lib/api"
 
 export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true)
-  const [userData, setUserData] = useState(mockUserData)
+  const [userData, setUserData] = useState<any>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
@@ -106,58 +40,220 @@ export default function ProfilePage() {
     location: "",
     bio: "",
   })
+  const { toast } = useToast()
 
   useEffect(() => {
-    // Simulate API call
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-      setFormData({
-        name: userData.profile.name,
-        email: userData.profile.email,
-        phone: userData.profile.phone,
-        location: userData.profile.location,
-        bio: userData.profile.bio,
-      })
-    }, 1000)
+    // Fetch user profile data
+    const fetchProfile = async () => {
+      setIsLoading(true)
+      try {
+        const profileData = await fetchUserProfile()
+        setUserData(profileData)
+        setFormData({
+          name: profileData.profile.name,
+          email: profileData.profile.email,
+          phone: profileData.profile.phone,
+          location: profileData.profile.location,
+          bio: profileData.profile.bio,
+        })
+      } catch (error) {
+        console.error("Failed to fetch profile:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load profile data. Please try again.",
+          variant: "destructive",
+        })
+        
+        // Fallback to mock data if API fails
+        const mockUserData = {
+          profile: {
+            id: "user-001",
+            name: "John Kamau",
+            email: "john.kamau@example.com",
+            phone: "+254 712 345 678",
+            avatar: "/placeholder.svg",
+            location: "Nairobi, Kenya",
+            joinDate: "2023-09-15",
+            verificationStatus: "verified",
+            bio: "Passionate about community savings and investments. Active member of multiple chamas.",
+          },
+          stats: {
+            chamasJoined: 3,
+            totalSavings: 45000,
+            totalInvestments: 75000,
+            activeLoans: 1,
+            currency: "KES",
+          },
+          notifications: {
+            email: true,
+            push: true,
+            sms: false,
+            marketing: false,
+            chamaUpdates: true,
+            transactionAlerts: true,
+            investmentUpdates: true,
+            loanReminders: true,
+          },
+          security: {
+            twoFactorEnabled: true,
+            lastPasswordChange: "2024-03-10",
+            loginAlerts: true,
+            transactionPinEnabled: true,
+            biometricEnabled: false,
+          },
+          paymentMethods: [
+            {
+              id: "pm-001",
+              type: "M-Pesa",
+              number: "******6789",
+              isDefault: true,
+            },
+            {
+              id: "pm-002",
+              type: "Bank Account",
+              number: "****5432",
+              bank: "Equity Bank",
+              isDefault: false,
+            }
+          ],
+          verificationDocuments: [
+            {
+              type: "ID Card",
+              status: "verified",
+              dateSubmitted: "2023-09-15",
+              dateVerified: "2023-09-17",
+            },
+            {
+              type: "Proof of Address",
+              status: "verified",
+              dateSubmitted: "2023-09-15",
+              dateVerified: "2023-09-18",
+            }
+          ]
+        }
+        setUserData(mockUserData)
+        setFormData({
+          name: mockUserData.profile.name,
+          email: mockUserData.profile.email,
+          phone: mockUserData.profile.phone,
+          location: mockUserData.profile.location,
+          bio: mockUserData.profile.bio,
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
     
-    return () => clearTimeout(timer)
-  }, [userData])
+    fetchProfile()
+  }, [toast])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
-  const handleSaveProfile = () => {
-    // Would normally send to API
-    setUserData(prev => ({
-      ...prev,
-      profile: {
-        ...prev.profile,
-        ...formData
-      }
-    }))
-    setIsEditing(false)
+  const handleSaveProfile = async () => {
+    try {
+      // Update profile via API
+      const updatedProfile = await updateUserProfile(formData)
+      
+      // Update local state
+      setUserData(prev => ({
+        ...prev,
+        profile: {
+          ...prev.profile,
+          ...formData
+        }
+      }))
+      
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been updated successfully.",
+      })
+      
+      setIsEditing(false)
+    } catch (error) {
+      console.error("Failed to update profile:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update profile. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleToggleNotification = (key: string) => {
-    setUserData(prev => ({
-      ...prev,
-      notifications: {
-        ...prev.notifications,
-        [key]: !prev.notifications[key as keyof typeof prev.notifications]
+  const handleToggleNotification = async (key: string) => {
+    try {
+      const updatedPreferences = {
+        ...userData.notifications,
+        [key]: !userData.notifications[key as keyof typeof userData.notifications]
       }
-    }))
+      
+      // Update via API
+      await updateNotificationPreferences(updatedPreferences)
+      
+      // Update local state
+      setUserData(prev => ({
+        ...prev,
+        notifications: updatedPreferences
+      }))
+      
+      toast({
+        title: "Preferences updated",
+        description: "Your notification preferences have been updated.",
+      })
+    } catch (error) {
+      console.error("Failed to update notification preferences:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update preferences. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleToggleSecurity = (key: string) => {
-    setUserData(prev => ({
-      ...prev,
-      security: {
-        ...prev.security,
-        [key]: !prev.security[key as keyof typeof prev.security]
+  const handleToggleSecurity = async (key: string) => {
+    try {
+      const updatedSettings = {
+        ...userData.security,
+        [key]: !userData.security[key as keyof typeof userData.security]
       }
-    }))
+      
+      // Update via API
+      await updateSecuritySettings(updatedSettings)
+      
+      // Update local state
+      setUserData(prev => ({
+        ...prev,
+        security: updatedSettings
+      }))
+      
+      toast({
+        title: "Security settings updated",
+        description: "Your security settings have been updated.",
+      })
+    } catch (error) {
+      console.error("Failed to update security settings:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update security settings. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+      window.location.href = "/login"
+    } catch (error) {
+      console.error("Failed to logout:", error)
+      toast({
+        title: "Error",
+        description: "Failed to logout. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   const getVerificationStatusBadge = (status: string) => {
@@ -196,7 +292,7 @@ export default function ProfilePage() {
           <h1 className="text-3xl font-bold tracking-tight">My Profile</h1>
           <p className="text-muted-foreground">Manage your account settings and preferences</p>
         </div>
-        <Button variant="destructive" className="flex items-center">
+        <Button variant="destructive" className="flex items-center" onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" /> Logout
         </Button>
       </div>
@@ -393,7 +489,7 @@ export default function ProfilePage() {
               <div>
                 <h3 className="text-lg font-medium mb-4">Verification Documents</h3>
                 <div className="space-y-4">
-                  {userData.verificationDocuments.map((doc, index) => (
+                  {userData.verificationDocuments.map((doc: any, index: number) => (
                     <div key={index} className="flex justify-between items-center p-4 border rounded-lg">
                       <div>
                         <div className="font-medium">{doc.type}</div>
@@ -655,7 +751,7 @@ export default function ProfilePage() {
                     </div>
                     <Button variant="outline">View Sessions</Button>
                   </div>
-                  <Button variant="destructive" className="w-full">
+                  <Button variant="destructive" className="w-full" onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" /> Log Out of All Devices
                   </Button>
                 </div>
@@ -675,7 +771,7 @@ export default function ProfilePage() {
               <div>
                 <h3 className="text-lg font-medium mb-4">Saved Payment Methods</h3>
                 <div className="space-y-4">
-                  {userData.paymentMethods.map((method) => (
+                  {userData.paymentMethods.map((method: any) => (
                     <div key={method.id} className="flex justify-between items-center p-4 border rounded-lg">
                       <div className="flex items-center">
                         {method.type === "M-Pesa" ? (
@@ -738,10 +834,7 @@ export default function ProfilePage() {
               </div>
             </CardContent>
             <CardFooter>
-              <div className="text-sm text-muted-foreground flex items-center w-full">
-                <Shield className="h-4 w-4 mr-2" />
-                Your payment information is securely stored and encrypted
-              </div>
+              <Button className="w-full">Save Payment Settings</Button>
             </CardFooter>
           </Card>
         </TabsContent>
@@ -749,3 +842,4 @@ export default function ProfilePage() {
     </div>
   )
 }
+

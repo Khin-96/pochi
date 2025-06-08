@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog"
 import { PiggyBank, Plus, Calendar } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { fetchSavingsGoals, createSavingsGoal, contributeToDavingsGoal, getCurrentUser } from "@/lib/api"
+import { fetchSavingsGoals, createSavingsGoal, contributeToSavingsGoal, getCurrentUser } from "@/lib/api"
 import { formatCurrency } from "@/lib/utils"
 
 const createGoalSchema = z.object({
@@ -132,7 +132,7 @@ export default function SavingsPage() {
 
     setIsContributing(true)
     try {
-      await contributeToDavingsGoal(selectedGoal._id, values.amount)
+      await contributeToSavingsGoal(selectedGoal._id, values.amount)
 
       // Update the goal in the local state
       setGoals((prev) =>
@@ -434,3 +434,4 @@ export default function SavingsPage() {
     </div>
   )
 }
+

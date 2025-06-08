@@ -77,6 +77,69 @@ export async function forgotPassword(email: string) {
   return response.json()
 }
 
+// User Profile functions
+export async function fetchUserProfile() {
+  const response = await fetch("/api/user/profile")
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch user profile")
+  }
+
+  const data = await response.json()
+  return data.profile
+}
+
+export async function updateUserProfile(profileData: any) {
+  const response = await fetch("/api/user/profile", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(profileData),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.message || "Failed to update profile")
+  }
+
+  return response.json().then((data) => data.profile)
+}
+
+export async function updateNotificationPreferences(preferences: any) {
+  const response = await fetch("/api/user/notifications", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(preferences),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.message || "Failed to update notification preferences")
+  }
+
+  return response.json()
+}
+
+export async function updateSecuritySettings(settings: any) {
+  const response = await fetch("/api/user/security", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(settings),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.message || "Failed to update security settings")
+  }
+
+  return response.json()
+}
+
 // Dashboard data
 export async function fetchDashboardData() {
   const user = await getCurrentUser()
@@ -627,3 +690,4 @@ export async function fetchTransactions() {
   const data = await response.json()
   return data.transactions
 }
+
