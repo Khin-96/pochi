@@ -12,7 +12,14 @@ export async function GET() {
 
     const chamas = await findChamasByUserId(user._id as string)
 
-    return NextResponse.json({ success: true, chamas })
+    // Transform the chamas to include id field and serialize ObjectIds
+    const transformedChamas = chamas.map(chama => ({
+      ...chama,
+      id: chama._id.toString(),
+      _id: chama._id.toString()
+    }))
+
+    return NextResponse.json({ success: true, chamas: transformedChamas })
   } catch (error) {
     console.error("Get chamas error:", error)
     return NextResponse.json(
@@ -37,7 +44,14 @@ export async function POST(req: Request) {
 
     const chama = await createChama(body, user._id as string, user.name)
 
-    return NextResponse.json({ success: true, chama }, { status: 201 })
+    // Transform the chama to include id field and serialize ObjectIds
+    const transformedChama = {
+      ...chama,
+      id: chama._id.toString(),
+      _id: chama._id.toString()
+    }
+
+    return NextResponse.json({ success: true, chama: transformedChama }, { status: 201 })
   } catch (error) {
     console.error("Create chama error:", error)
     return NextResponse.json(
