@@ -167,7 +167,7 @@ async function setAuthCookie(token: string, rememberMe: boolean = false): Promis
   const isProduction = process.env.NODE_ENV === "production";
   const secure = isProduction || !!process.env.VERCEL || !!process.env.NETLIFY;
 
-  cookies().set({
+  (await cookies()).set({
     name: TOKEN_NAME,
     value: token,
     httpOnly: true,
@@ -179,7 +179,7 @@ async function setAuthCookie(token: string, rememberMe: boolean = false): Promis
 }
 
 async function clearAuthCookie(): Promise<void> {
-  cookies().set({
+  (await cookies()).set({
     name: TOKEN_NAME,
     value: "",
     httpOnly: true,
@@ -191,6 +191,5 @@ async function clearAuthCookie(): Promise<void> {
 }
 
 async function getAuthCookie(): Promise<string | undefined> {
-  const cookieStore = cookies();
-  return cookieStore.get(TOKEN_NAME)?.value;
+  return (await cookies()).get(TOKEN_NAME)?.value;
 }

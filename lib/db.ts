@@ -260,6 +260,11 @@ export async function findLoansByUserId(userId: string): Promise<Loan[]> {
     .sort({ requestDate: -1 })
     .toArray()
 }
+export async function findUserByPhone(phone: string): Promise<User | null> {
+  const client = await clientPromise;
+  const db = client.db(DB_NAME);
+  return db.collection(COLLECTIONS.USERS).findOne({ phone });
+}
 
 // Savings Goal functions
 export async function createSavingsGoal(

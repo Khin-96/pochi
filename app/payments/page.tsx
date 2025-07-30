@@ -5,125 +5,207 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { sendMoney, fetchTransactions, getCurrentUser } from "@/lib/api";
+import { sendMoney, fetchTransactions, getCurrentUser, verifyRecipient } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { DownloadIcon } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { sendMoneySchema } from "@/lib/validation";
 
 type Transaction = {
   id: string;
   amount: number;
   description: string;
-  type: "send" | "receive";
-  counterparty: string;
-  createdAt: string;
-  status: "pending" | "completed" | "failed";
+  recipient: string;
+  date: string;
+  type: "credit" | "debit";
 };
 
 type User = {
   id: string;
   name: string;
+  email: string;
   phone: string;
   balance: number;
 };
 
-const sendMoneySchema = z.object({
-  recipientPhone: z.string()
-    .min(10, { message: "Phone number must be at least 10 digits." })
-    .max(15, { message: "Phone number too long." })
-    .regex(/^[0-9]+$/, { message: "Phone number must contain only digits." }),
-  amount: z.string()
-    .min(1, { message: "Amount is required." })
-    .transform((val) => {
-      const num = parseFloat(val);
-      if (isNaN(num)) throw new Error("Invalid amount");
-      return num;
-    })
-    .refine((val) => val >= 50, { message: "Minimum amount is 50 KES." })
-    .refine((val) => val <= 50000, { message: "Maximum amount is 50,000 KES." }),
-  description: z.string()
-    .min(3, { message: "Description must be at least 3 characters." })
-    .max(100, { message: "Description too long." }),
-});
+const formatCurrency = (value: number, currency: string = 'KES') => {
+  return new Intl.NumberFormat('en-KE', {
+    style: 'currency',
+    currency: currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value);
+};
+
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-KE', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
 
 export default function PaymentsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof sendMoneySchema>>({
     resolver: zodResolver(sendMoneySchema),
     defaultValues: {
+      recipientType: "phone",
       recipientPhone: "",
+      recipientEmail: "",
       amount: "",
       description: "",
+      recipientName: "",
     },
   });
 
+  const recipientType = form.watch("recipientType");
+  const amount = form.watch("amount");
+
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
+    const fetchData = async () => {
       try {
         const [userData, transactionsData] = await Promise.all([
           getCurrentUser(),
-          fetchTransactions().catch(() => []),
+          fetchTransactions()
         ]);
-
+        
         if (userData && userData.balance) {
           userData.balance = Number(userData.balance);
         }
 
-        setUser(userData ?? null);
+        setUser(userData);
         setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
       } catch (error) {
-        console.error("Failed to fetch payments data:", error);
+        console.error("Failed to fetch data:", error);
         toast({
           title: "Error",
-          description: "Failed to load payments data. Please try again.",
+          description: "Failed to load data. Please try again.",
           variant: "destructive",
         });
-        setUser(null);
-        setTransactions([]);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadData();
-  }, [toast]);
+    fetchData();
+  }, []);
 
-  async function onSubmit(values: z.infer<typeof sendMoneySchema>) {
-    setIsSending(true);
+  const handleVerifyRecipient = async (values: z.infer<typeof sendMoneySchema>) => {
+    if (!user) return;
+    
+    // Check balance first
+    if (user.balance < Number(values.amount)) {
+      toast({
+        title: "Insufficient Balance",
+        description: "You don't have enough funds for this transaction.",
+        variant: "destructive",
+      });
+      return;
+    }
 
+    setIsVerifying(true);
+    setVerificationError(null);
+    
     try {
-      const freshUser = await getCurrentUser();
-      const freshBalance = Number(freshUser?.balance ?? 0);
-      const requestedAmount = Number(values.amount);
-
-      if (requestedAmount > freshBalance) {
+      const identifier = values.recipientType === "phone" 
+        ? values.recipientPhone 
+        : values.recipientEmail;
+      
+      if (!identifier) {
         toast({
-          title: "Insufficient Funds",
-          description: `You only have ${formatCurrency(freshBalance)} available.`,
+          title: "Error",
+          description: "Please provide recipient details",
           variant: "destructive",
         });
         return;
       }
 
-      await sendMoney(values.recipientPhone, requestedAmount, values.description);
+      const verification = await verifyRecipient(
+        identifier,
+        values.recipientType
+      );
+
+      if (!verification.verified) {
+        throw new Error(verification.message || "Recipient verification failed");
+      }
+
+      // Store recipient name for confirmation
+      form.setValue('recipientName', verification.name);
+      
+      // Show confirmation dialog
+      setShowConfirmation(true);
+      
+    } catch (error) {
+      console.error("Verification failed:", error);
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Recipient not found. Please check the details and try again.";
+      
+      setVerificationError(errorMessage);
+      toast({
+        title: "Verification Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleConfirmSend = async () => {
+    if (!user) return;
+    
+    const values = form.getValues();
+    const identifier = values.recipientType === "phone" 
+      ? values.recipientPhone 
+      : values.recipientEmail;
+    
+    if (!identifier) return;
+
+    setIsSending(true);
+
+    try {
+      const response = await sendMoney(
+        identifier,
+        Number(values.amount),
+        values.description || "",
+        values.recipientType
+      );
 
       toast({
         title: "Success",
-        description: `${formatCurrency(requestedAmount)} sent successfully to ${values.recipientPhone}`,
+        description: `${formatCurrency(Number(values.amount))} sent successfully to ${values.recipientName || "recipient"}!`,
       });
 
+      // Refresh data
       const [updatedUser, updatedTransactions] = await Promise.all([
-        getCurrentUser().catch(() => null),
-        fetchTransactions().catch(() => []),
+        getCurrentUser(),
+        fetchTransactions()
       ]);
 
       if (updatedUser && updatedUser.balance) {
@@ -133,7 +215,6 @@ export default function PaymentsPage() {
       setUser(updatedUser);
       setTransactions(Array.isArray(updatedTransactions) ? updatedTransactions : []);
       form.reset();
-
     } catch (error: any) {
       console.error("Failed to send money:", error);
       toast({
@@ -143,100 +224,36 @@ export default function PaymentsPage() {
       });
     } finally {
       setIsSending(false);
-    }
-  }
-
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return isNaN(date.getTime())
-        ? "Unknown date"
-        : date.toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-    } catch {
-      return "Unknown date";
+      setShowConfirmation(false);
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-KE", {
-      style: "currency",
-      currency: "KES",
-      minimumFractionDigits: 0,
-    }).format(amount);
+  const handleCancelSend = () => {
+    setShowConfirmation(false);
+    toast({
+      title: "Cancelled",
+      description: "Transaction was cancelled.",
+    });
   };
 
-  const refreshUserData = async () => {
-    try {
-      const userData = await getCurrentUser();
-      if (userData && userData.balance) {
-        userData.balance = Number(userData.balance);
-      }
-      setUser(userData);
-    } catch (error) {
-      console.error("Failed to refresh user data:", error);
-    }
+  const downloadReceipt = (transaction: Transaction) => {
+    toast({
+      title: "Receipt Download",
+      description: `Receipt for transaction ${transaction.id} would be downloaded.`,
+    });
   };
-
-  if (isLoading) {
-    return (
-      <div className="container mx-auto px-4 py-8 space-y-8">
-        <Skeleton className="h-10 w-1/3" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-1/2" />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-4 w-1/3" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ))}
-              <Skeleton className="h-10 w-full mt-4" />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-1/2" />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex justify-between">
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-4 w-24" />
-                  </div>
-                  <Skeleton className="h-4 w-20" />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Payments</h1>
-        {user && (
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-500">Balance:</span>
-              <span className="font-semibold text-lg">{formatCurrency(Number(user.balance))}</span>
-            </div>
-            <Button variant="outline" size="sm" onClick={refreshUserData}>
-              Refresh
-            </Button>
+        {user ? (
+          <div className="text-right">
+            <p className="text-sm text-gray-500">Available Balance</p>
+            <p className="text-2xl font-semibold">{formatCurrency(user.balance)}</p>
           </div>
+        ) : (
+          <Skeleton className="h-12 w-48" />
         )}
       </div>
 
@@ -248,20 +265,82 @@ export default function PaymentsPage() {
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <form 
+                onSubmit={form.handleSubmit(handleVerifyRecipient)} 
+                className="space-y-6"
+              >
                 <FormField
                   control={form.control}
-                  name="recipientPhone"
+                  name="recipientType"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Recipient Phone Number</FormLabel>
+                    <FormItem className="space-y-3">
+                      <FormLabel>Recipient Type</FormLabel>
                       <FormControl>
-                        <Input placeholder="0712345678" {...field} />
+                        <RadioGroup
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          className="flex flex-col space-y-1"
+                        >
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value="phone" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              Phone Number
+                            </FormLabel>
+                          </FormItem>
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value="email" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              Email
+                            </FormLabel>
+                          </FormItem>
+                        </RadioGroup>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                {recipientType === "phone" ? (
+                  <FormField
+                    control={form.control}
+                    name="recipientPhone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Recipient Phone Number</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="0712345678" 
+                            {...field} 
+                            autoComplete="on"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="recipientEmail"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Recipient Email</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="recipient@example.com" 
+                            {...field} 
+                            autoComplete="off"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <FormField
                   control={form.control}
@@ -273,8 +352,7 @@ export default function PaymentsPage() {
                         <Input
                           type="number"
                           placeholder="500"
-                          min="50"
-                          max="50000"
+                          min="10"
                           step="1"
                           {...field}
                         />
@@ -282,7 +360,7 @@ export default function PaymentsPage() {
                       <FormMessage />
                       {user && (
                         <p className="text-sm text-gray-500">
-                          Available balance: {formatCurrency(Number(user.balance))}
+                          Available balance: {formatCurrency(user.balance)}
                         </p>
                       )}
                     </FormItem>
@@ -294,25 +372,39 @@ export default function PaymentsPage() {
                   name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Description</FormLabel>
+                      <FormLabel>Description (Optional)</FormLabel>
                       <FormControl>
-                        <Textarea placeholder="For groceries" {...field} maxLength={100} />
+                        <Textarea 
+                          placeholder="e.g. For groceries" 
+                          {...field} 
+                          maxLength={100} 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <Button type="submit" className="w-full" disabled={isSending || !user}>
-                  {isSending ? (
+                {verificationError && (
+                  <div className="text-red-600 text-sm">
+                    {verificationError}
+                  </div>
+                )}
+
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  disabled={isLoading || isVerifying || !user}
+                >
+                  {isVerifying ? (
                     <>
                       <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      Processing...
+                      Verifying...
                     </>
-                  ) : "Send Money"}
+                  ) : "Verify Recipient"}
                 </Button>
               </form>
             </Form>
@@ -325,49 +417,40 @@ export default function PaymentsPage() {
             <CardTitle>Transaction History</CardTitle>
           </CardHeader>
           <CardContent>
-            {transactions.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-gray-500">No transactions yet</p>
-                <p className="text-sm text-gray-400 mt-2">Your transactions will appear here</p>
+            {isLoading ? (
+              <div className="space-y-4">
+                {[...Array(5)].map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
               </div>
+            ) : transactions.length === 0 ? (
+              <p className="text-center text-gray-500 py-8">No transactions yet</p>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {transactions.map((transaction) => (
-                  <div key={transaction.id} className="flex items-start justify-between">
-                    <div className="flex items-start space-x-3">
-                      <div className={`p-2 rounded-full ${transaction.type === 'send' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
-                        {transaction.type === 'send' ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clipRule="evenodd" />
-                          </svg>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium">{transaction.description || "No description"}</p>
-                        <p className="text-sm text-gray-500">
-                          {transaction.type === 'send' ? 'To: ' : 'From: '}
-                          {transaction.counterparty || "Unknown"}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">{formatDate(transaction.createdAt)}</p>
-                      </div>
+                  <div key={transaction.id} className="border rounded-lg p-4 flex justify-between items-center">
+                    <div>
+                      <p className="font-medium">
+                        {transaction.type === 'credit' ? 'Received from' : 'Sent to'} {transaction.recipient}
+                      </p>
+                      <p className="text-sm text-gray-500">{formatDate(transaction.date)}</p>
+                      {transaction.description && (
+                        <p className="text-sm mt-1">{transaction.description}</p>
+                      )}
                     </div>
                     <div className="text-right">
-                      <p className={`font-semibold ${transaction.type === 'send' ? 'text-red-600' : 'text-green-600'}`}>
-                        {transaction.type === 'send' ? '-' : '+'}{formatCurrency(transaction.amount)}
+                      <p className={`font-semibold ${transaction.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
+                        {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
                       </p>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        transaction.status === 'completed'
-                          ? 'bg-green-100 text-green-800'
-                          : transaction.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-red-100 text-red-800'
-                      }`}>
-                        {transaction.status || 'unknown'}
-                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-blue-600 hover:text-blue-800"
+                        onClick={() => downloadReceipt(transaction)}
+                      >
+                        <DownloadIcon className="h-4 w-4 mr-2" />
+                        Receipt
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -376,6 +459,91 @@ export default function PaymentsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Transaction</DialogTitle>
+            <DialogDescription>
+              Please confirm the transaction details below:
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="font-medium mb-2">Transaction Summary</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Recipient:</span>
+                  <div className="flex items-center">
+                    <span className="font-medium">
+                      {form.getValues('recipientName') || 'Unknown'}
+                    </span>
+                    <span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                      Verified
+                    </span>
+                  </div>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Amount:</span>
+                  <span className="font-medium">{formatCurrency(Number(amount))}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Recipient Type:</span>
+                  <span className="font-medium capitalize">{recipientType}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Recipient:</span>
+                  <span className="font-medium">
+                    {recipientType === 'phone' 
+                      ? form.getValues('recipientPhone')
+                      : form.getValues('recipientEmail')}
+                  </span>
+                </div>
+                {form.getValues('description') && (
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Description:</span>
+                    <span className="font-medium">{form.getValues('description')}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+              <h3 className="font-medium text-yellow-800 mb-1">Important</h3>
+              <p className="text-sm text-yellow-700">
+                Please double-check all details before confirming. Transactions cannot be reversed once completed.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={handleCancelSend}
+              disabled={isSending}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleConfirmSend}
+              disabled={isSending}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {isSending ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </>
+              ) : "Confirm & Send"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

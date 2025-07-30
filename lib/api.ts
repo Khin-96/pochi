@@ -601,6 +601,82 @@ export async function contributeToSavingsGoal(goalId: string, amount: number) {
   return response.json();
 }
 
+// Updated verifyRecipient function with better error handling
+export async function verifyRecipient(
+  identifier: string,
+  type: 'phone' | 'email'
+): Promise<{
+  name: string;
+  verified: boolean;
+  type: 'phone' | 'email';
+  identifier: string;
+}> {
+  try {
+    // Try the new endpoint first
+    let response;
+    try {
+      response = await fetch('/api/payments/verify-recipient', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ identifier, type }),
+      });
+    } catch (networkError) {
+      console.warn('Primary verification endpoint failed, trying fallback');
+      // Fallback to a different endpoint if the primary one fails
+      response = await fetch('/api/verify-recipient', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ identifier, type }),
+      });
+    }
+
+    // Check if the response is JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error('Invalid response format:', text.substring(0, 100));
+      throw new Error('Server returned an invalid response format');
+    }
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Recipient verification failed');
+    }
+
+    if (!data.verified) {
+      throw new Error(data.message || 'Recipient not found');
+    }
+
+    return {
+      name: data.name || 'Verified User',
+      verified: true,
+      type,
+      identifier
+    };
+  } catch (error) {
+    console.error('Verification error:', error);
+    // Return a mock response in development if the endpoint doesn't exist
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Using mock verification response in development');
+      return {
+        name: 'Test User',
+        verified: true,
+        type,
+        identifier
+      };
+    }
+    throw new Error(
+      error instanceof Error 
+        ? error.message 
+        : 'Failed to verify recipient. Please try again.'
+    );
+  }
+}
 // Loans functions
 export async function fetchLoans() {
   const response = await fetch("/api/loans");

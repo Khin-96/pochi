@@ -36,15 +36,18 @@ export interface ChamaMember {
 }
 
 export interface Transaction {
-  _id?: string
-  userId: string
-  chamaId?: string
-  type: "contribution" | "welfare" | "investment" | "payout" | "deposit" | "withdrawal" | "loan" | "loan_repayment"
-  amount: number
-  description: string
-  date: Date
-  isTest: boolean
-  status: "pending" | "completed" | "failed"
+  _id?: string;
+  userId: string;
+  chamaId?: string;
+  type: "contribution" | "welfare" | "investment" | "payout" | "deposit" | "withdrawal" | "loan" | "loan_repayment" | "send" | "receive";
+  amount: number;
+  description: string;
+  date: Date;
+  isTest: boolean;
+  status: "pending" | "completed" | "failed";
+  counterparty?: string;
+  counterpartyName?: string;
+  receiptUrl?: string;
 }
 
 export interface JoinRequest {
