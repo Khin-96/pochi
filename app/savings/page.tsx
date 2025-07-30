@@ -53,6 +53,12 @@ interface SavingsGoal {
   createdAt: string
 }
 
+interface UserData {
+  _id: string
+  balance: number
+  // Add other user properties as needed
+}
+
 export default function SavingsPage() {
   const [goals, setGoals] = useState<SavingsGoal[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -61,7 +67,7 @@ export default function SavingsPage() {
   const [selectedGoal, setSelectedGoal] = useState<SavingsGoal | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [isContributing, setIsContributing] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<UserData | null>(null)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -86,10 +92,17 @@ export default function SavingsPage() {
     const loadData = async () => {
       setIsLoading(true)
       try {
-        const [userData, goalsData] = await Promise.all([getCurrentUser(), fetchSavingsGoals()])
+        const [userData, savingsData] = await Promise.all([
+          getCurrentUser(),
+          fetchSavingsGoals()
+        ])
+
+        if (!userData) {
+          throw new Error("User not authenticated")
+        }
 
         setUser(userData)
-        setGoals(goalsData)
+        setGoals(savingsData?.goals || [])
       } catch (error) {
         console.error("Failed to fetch savings data:", error)
         toast({
@@ -97,19 +110,23 @@ export default function SavingsPage() {
           description: "Failed to load savings data. Please try again.",
           variant: "destructive",
         })
+        router.push("/login") // Redirect if not authenticated
       } finally {
         setIsLoading(false)
       }
     }
 
     loadData()
-  }, [toast])
+  }, [toast, router])
 
   async function onCreateGoal(values: z.infer<typeof createGoalSchema>) {
     setIsCreating(true)
     try {
       const newGoal = await createSavingsGoal(values)
-      setGoals((prev) => [...prev, newGoal])
+      setGoals(prev => [...prev, {
+        ...newGoal,
+        currentAmount: 0 // Ensure new goal starts at 0
+      }])
       toast({
         title: "Goal created!",
         description: "Your savings goal has been created successfully.",
@@ -117,6 +134,7 @@ export default function SavingsPage() {
       setShowCreateDialog(false)
       createForm.reset()
     } catch (error) {
+      console.error("Error creating goal:", error)
       toast({
         title: "Error",
         description: "Failed to create savings goal. Please try again.",
@@ -128,24 +146,27 @@ export default function SavingsPage() {
   }
 
   async function onContributeToGoal(values: z.infer<typeof contributeSchema>) {
-    if (!selectedGoal) return
+    if (!selectedGoal || !user) return
 
     setIsContributing(true)
     try {
+      if (values.amount > (user.balance || 0)) {
+        throw new Error("Insufficient balance")
+      }
+
       await contributeToSavingsGoal(selectedGoal._id, values.amount)
 
-      // Update the goal in the local state
-      setGoals((prev) =>
-        prev.map((goal) => {
-          if (goal._id === selectedGoal._id) {
-            return {
-              ...goal,
-              currentAmount: goal.currentAmount + values.amount,
-            }
-          }
-          return goal
-        }),
+      // Update local state
+      setGoals(prev =>
+        prev.map(goal => 
+          goal._id === selectedGoal._id 
+            ? { ...goal, currentAmount: goal.currentAmount + values.amount }
+            : goal
+        )
       )
+
+      // Update user balance
+      setUser(prev => prev ? { ...prev, balance: prev.balance - values.amount } : null)
 
       toast({
         title: "Contribution successful!",
@@ -155,9 +176,10 @@ export default function SavingsPage() {
       setShowContributeDialog(false)
       contributeForm.reset()
     } catch (error) {
+      console.error("Error contributing:", error)
       toast({
         title: "Error",
-        description: "Failed to contribute to savings goal. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to contribute to savings goal",
         variant: "destructive",
       })
     } finally {
@@ -177,8 +199,11 @@ export default function SavingsPage() {
   ]
 
   const getCategoryLabel = (value: string) => {
-    return categories.find((cat) => cat.value === value)?.label || value
+    return categories.find(cat => cat.value === value)?.label || value
   }
+
+  const totalSavings = goals.reduce((total, goal) => total + (goal.currentAmount || 0), 0)
+  const balance = user?.balance || 0
 
   return (
     <div className="container py-6 space-y-6">
@@ -192,14 +217,14 @@ export default function SavingsPage() {
         </Button>
       </div>
 
-      {/* Balance Card */}
+      {/* Balance Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Available Balance</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(user?.balance || 0, "KES")}</div>
+            <div className="text-2xl font-bold">{formatCurrency(balance, "KES")}</div>
             <p className="text-xs text-muted-foreground">Your actual balance</p>
           </CardContent>
         </Card>
@@ -209,10 +234,7 @@ export default function SavingsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {formatCurrency(
-                goals.reduce((total, goal) => total + goal.currentAmount, 0),
-                "KES",
-              )}
+              {formatCurrency(totalSavings, "KES")}
             </div>
             <p className="text-xs text-muted-foreground">Across all your savings goals</p>
           </CardContent>
@@ -251,11 +273,12 @@ export default function SavingsPage() {
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {goals.map((goal) => {
-              const progress = Math.min(Math.round((goal.currentAmount / goal.targetAmount) * 100), 100)
+            
+{goals.map((goal) => {
+  const progress = Math.min(Math.round((goal.currentAmount / goal.targetAmount) * 100), 100);
 
-              return (
-                <Card key={goal._id}>
+  return (
+    <Card key={goal._id}>
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
@@ -278,8 +301,12 @@ export default function SavingsPage() {
                       </div>
                       <Progress value={progress} className="h-2" />
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{formatCurrency(goal.currentAmount, "KES")}</span>
-                        <span className="font-medium">{formatCurrency(goal.targetAmount, "KES")}</span>
+                        <span className="text-muted-foreground">
+                          {formatCurrency(goal.currentAmount, "KES")}
+                        </span>
+                        <span className="font-medium">
+                          {formatCurrency(goal.targetAmount, "KES")}
+                        </span>
                       </div>
                     </div>
                   </CardContent>
@@ -411,9 +438,16 @@ export default function SavingsPage() {
                   <FormItem>
                     <FormLabel>Amount (KES)</FormLabel>
                     <FormControl>
-                      <Input type="number" min={50} {...field} />
+                      <Input 
+                        type="number" 
+                        min={50} 
+                        max={user?.balance || 0}
+                        {...field} 
+                      />
                     </FormControl>
-                    <FormDescription>Available balance: {formatCurrency(user?.balance || 0, "KES")}</FormDescription>
+                    <FormDescription>
+                      Available balance: {formatCurrency(user?.balance || 0, "KES")}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -434,4 +468,3 @@ export default function SavingsPage() {
     </div>
   )
 }
-

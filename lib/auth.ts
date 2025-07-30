@@ -16,7 +16,7 @@ const TOKEN_EXPIRY = 60 * 60 * 24 * 7; // 7 days in seconds
 const REMEMBER_ME_EXPIRY = TOKEN_EXPIRY * 2; // 14 days
 
 // Types
-export type AuthUser = Omit<User, "password">;
+export type AuthUser = Omit<User, "password"> & { _id: string };
 export type LoginCredentials = {
   email: string;
   password: string;
@@ -24,15 +24,45 @@ export type LoginCredentials = {
 };
 
 /**
- * Register a new user
+ * Verify JWT token with proper error handling
+ */
+async function verifyToken(token: string): Promise<{ userId: string; email: string; exp: number }> {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; email: string; exp: number };
+    
+    // Check if token is about to expire (within 5 minutes)
+    const now = Math.floor(Date.now() / 1000);
+    if (decoded.exp - now < 300) {
+      throw new jwt.TokenExpiredError("Token about to expire", new Date(decoded.exp * 1000));
+    }
+    
+    return decoded;
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      throw new Error("Session expired. Please login again.");
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      await clearAuthCookie();
+      throw new Error("Invalid session. Please login again.");
+    }
+    throw new Error("Authentication failed");
+  }
+}
+
+/**
+ * Register a new user with proper data validation
  */
 export async function signUp(
   userData: Omit<User, "_id" | "createdAt" | "balance">
 ): Promise<AuthUser> {
   try {
+    if (!userData.email || !userData.password) {
+      throw new Error("Email and password are required");
+    }
+
     const user = await createUser(userData);
     const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    return { ...userWithoutPassword, _id: user._id.toString() };
   } catch (error) {
     console.error("Sign up error:", error);
     throw new Error(
@@ -50,26 +80,30 @@ export async function login({
   rememberMe = false,
 }: LoginCredentials): Promise<AuthUser> {
   try {
+    if (!email || !password) {
+      throw new Error("Email and password are required");
+    }
+
     const user = await verifyUserCredentials(email, password);
     if (!user) {
       throw new Error("Invalid email or password");
     }
 
-    // Create JWT token
     const token = jwt.sign(
-      { userId: user._id.toString(), email: user.email },
+      { 
+        userId: user._id.toString(),
+        email: user.email,
+      },
       JWT_SECRET,
       {
         expiresIn: rememberMe ? REMEMBER_ME_EXPIRY : TOKEN_EXPIRY,
       }
     );
 
-    // Set secure cookie
-    setAuthCookie(token, rememberMe);
+    await setAuthCookie(token, rememberMe);
 
-    // Return user without password
     const { password: _, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    return { ...userWithoutPassword, _id: user._id.toString() };
   } catch (error) {
     console.error("Login error:", error);
     throw new Error(
@@ -79,48 +113,57 @@ export async function login({
 }
 
 /**
- * Clear authentication cookie
+ * Clear authentication cookie and redirect
  */
 export async function logout(): Promise<void> {
-  clearAuthCookie();
+  await clearAuthCookie();
   redirect("/login");
 }
 
 /**
- * Get current authenticated user
+ * Get current authenticated user with enhanced error handling
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
-    const token = getAuthCookie();
+    const token = await getAuthCookie();
     if (!token) return null;
 
-    // Verify token
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    const decoded = await verifyToken(token);
     const user = await findUserById(decoded.userId);
-    if (!user) return null;
-
-    // Return user without password
-    const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
-  } catch (error) {
-    // Invalid token - clear it
-    if (error instanceof jwt.JsonWebTokenError) {
-      clearAuthCookie();
+    
+    if (!user) {
+      await clearAuthCookie();
+      return null;
     }
+
+    const { password, ...userWithoutPassword } = user;
+    return { ...userWithoutPassword, _id: user._id.toString() };
+  } catch (error) {
+    console.error("Authentication error:", error);
+    await clearAuthCookie();
     return null;
   }
 }
 
 /**
- * Password reset initiation
+ * Get token with proper validation
  */
-export async function initiatePasswordReset(email: string): Promise<{ success: boolean }> {
-  // TODO: Implement password reset logic
-  return { success: true };
+export async function getToken(): Promise<string | null> {
+  try {
+    const token = await getAuthCookie();
+    if (!token) return null;
+
+    await verifyToken(token);
+    return token;
+  } catch (error) {
+    console.error("Token validation error:", error);
+    await clearAuthCookie();
+    return null;
+  }
 }
 
 // Helper functions
-function setAuthCookie(token: string, rememberMe: boolean = false): void {
+async function setAuthCookie(token: string, rememberMe: boolean = false): Promise<void> {
   const isProduction = process.env.NODE_ENV === "production";
   const secure = isProduction || !!process.env.VERCEL || !!process.env.NETLIFY;
 
@@ -135,7 +178,7 @@ function setAuthCookie(token: string, rememberMe: boolean = false): void {
   });
 }
 
-function clearAuthCookie(): void {
+async function clearAuthCookie(): Promise<void> {
   cookies().set({
     name: TOKEN_NAME,
     value: "",
@@ -147,6 +190,7 @@ function clearAuthCookie(): void {
   });
 }
 
-function getAuthCookie(): string | undefined {
-  return cookies().get(TOKEN_NAME)?.value;
+async function getAuthCookie(): Promise<string | undefined> {
+  const cookieStore = cookies();
+  return cookieStore.get(TOKEN_NAME)?.value;
 }

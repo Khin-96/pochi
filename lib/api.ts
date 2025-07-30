@@ -9,14 +9,14 @@ export async function signUp(userData: any) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(userData),
-  })
+  });
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to sign up")
+    const error = await response.json();
+    throw new Error(error.message || "Failed to sign up");
   }
 
-  return response.json()
+  return response.json();
 }
 
 export async function login(credentials: any) {
@@ -26,38 +26,38 @@ export async function login(credentials: any) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(credentials),
-  })
+  });
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to login")
+    const error = await response.json();
+    throw new Error(error.message || "Failed to login");
   }
 
-  return response.json()
+  return response.json();
 }
 
 export async function logout() {
   const response = await fetch("/api/auth/logout", {
     method: "POST",
-  })
+  });
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to logout")
+    const error = await response.json();
+    throw new Error(error.message || "Failed to logout");
   }
 
-  return response.json()
+  return response.json();
 }
 
 export async function getCurrentUser() {
-  const response = await fetch("/api/auth/user")
+  const response = await fetch("/api/auth/user");
 
   if (!response.ok) {
-    return null
+    return null;
   }
 
-  const data = await response.json()
-  return data.user
+  const data = await response.json();
+  return data.user;
 }
 
 export async function forgotPassword(email: string) {
@@ -67,26 +67,26 @@ export async function forgotPassword(email: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ email }),
-  })
+  });
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to send reset link")
+    const error = await response.json();
+    throw new Error(error.message || "Failed to send reset link");
   }
 
-  return response.json()
+  return response.json();
 }
 
 // User Profile functions
 export async function fetchUserProfile() {
-  const response = await fetch("/api/user/profile")
+  const response = await fetch("/api/user/profile");
 
   if (!response.ok) {
-    throw new Error("Failed to fetch user profile")
+    throw new Error("Failed to fetch user profile");
   }
 
-  const data = await response.json()
-  return data.profile
+  const data = await response.json();
+  return data.profile;
 }
 
 export async function updateUserProfile(profileData: any) {
@@ -96,14 +96,14 @@ export async function updateUserProfile(profileData: any) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(profileData),
-  })
+  });
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to update profile")
+    const error = await response.json();
+    throw new Error(error.message || "Failed to update profile");
   }
 
-  return response.json().then((data) => data.profile)
+  return response.json().then((data) => data.profile);
 }
 
 export async function updateNotificationPreferences(preferences: any) {
@@ -113,14 +113,14 @@ export async function updateNotificationPreferences(preferences: any) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(preferences),
-  })
+  });
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to update notification preferences")
+    const error = await response.json();
+    throw new Error(error.message || "Failed to update notification preferences");
   }
 
-  return response.json()
+  return response.json();
 }
 
 export async function updateSecuritySettings(settings: any) {
@@ -130,34 +130,34 @@ export async function updateSecuritySettings(settings: any) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(settings),
-  })
+  });
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to update security settings")
+    const error = await response.json();
+    throw new Error(error.message || "Failed to update security settings");
   }
 
-  return response.json()
+  return response.json();
 }
 
 // Dashboard data
 export async function fetchDashboardData() {
-  const user = await getCurrentUser()
-  if (!user) throw new Error("Not authenticated")
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Not authenticated");
 
   // Fetch chamas
-  const chamasResponse = await fetch("/api/chamas")
+  const chamasResponse = await fetch("/api/chamas");
   if (!chamasResponse.ok) {
-    throw new Error("Failed to fetch chamas")
+    throw new Error("Failed to fetch chamas");
   }
-  const chamasData = await chamasResponse.json()
+  const chamasData = await chamasResponse.json();
 
   // Fetch transactions
-  const transactionsResponse = await fetch("/api/transactions")
+  const transactionsResponse = await fetch("/api/transactions");
   if (!transactionsResponse.ok) {
-    throw new Error("Failed to fetch transactions")
+    throw new Error("Failed to fetch transactions");
   }
-  const transactionsData = await transactionsResponse.json()
+  const transactionsData = await transactionsResponse.json();
 
   // For now, we'll use mock data for insights
   const insights = [
@@ -169,7 +169,7 @@ export async function fetchDashboardData() {
       message: `Your ${chamasData.chamas[0]?.name || "chama"} has grown by 15% this month!`,
       type: "achievement",
     },
-  ]
+  ];
 
   return {
     user,
@@ -180,7 +180,7 @@ export async function fetchDashboardData() {
     chamas: chamasData.chamas,
     transactions: transactionsData.transactions,
     insights,
-  }
+  };
 }
 
 // Chama functions
@@ -265,6 +265,476 @@ export async function fetchChamaDetails(chamaId: string): Promise<ChamaDetails> 
   return transformedChama;
 }
 
+export async function joinChama(chamaId: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/join`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to join chama");
+  }
+
+  return response.json();
+}
+
+export async function leaveChama(chamaId: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/leave`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to leave chama");
+  }
+
+  return response.json();
+}
+
+export async function contributeToChama(chamaId: string, amount: number) {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("Not authenticated");
+  }
+
+  // Check user balance before making the request
+  if (user.balance < amount) {
+    throw new Error("Insufficient balance for this contribution");
+  }
+
+  const response = await fetch(`/api/chamas/${chamaId}/contribute`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ amount }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to contribute to chama");
+  }
+
+  return response.json();
+}
+
+export async function requestWelfare(chamaId: string, requestData: {
+  amount: number;
+  reason: string;
+  urgency?: 'low' | 'medium' | 'high';
+}) {
+  const response = await fetch(`/api/chamas/${chamaId}/welfare`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestData),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to request welfare");
+  }
+
+  return response.json();
+}
+
+// Chat functions
+export async function fetchChatHistory(chamaId: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/chat`);
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch chat history");
+  }
+
+  const data = await response.json();
+  return data.messages;
+}
+
+export async function fetchChamaBasicInfo(chamaId: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/basic`);
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch chama basic info");
+  }
+
+  const data = await response.json();
+  return data.chama;
+}
+
+export async function sendChatMessage(chamaId: string, content: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ content }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to send message");
+  }
+
+  return response.json().then((data) => data.message);
+}
+
+// Voting functions
+export async function fetchVotingProposals(chamaId: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/proposals`);
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch voting proposals");
+  }
+
+  const data = await response.json();
+  return data.proposals;
+}
+
+export async function createProposal(chamaId: string, proposalData: any) {
+  const response = await fetch(`/api/chamas/${chamaId}/proposals`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(proposalData),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to create proposal");
+  }
+
+  return response.json().then((data) => data.proposal);
+}
+
+export async function submitVote(chamaId: string, proposalId: string, option: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/proposals/${proposalId}/vote`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ option }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to submit vote");
+  }
+
+  return response.json();
+}
+
+// Admin functions
+export async function fetchChamaAdminData(chamaId: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/admin`);
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch admin data");
+  }
+
+  const data = await response.json();
+  return data.adminData;
+}
+
+export async function addCoAdmin(chamaId: string, email: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/admin/co-admin`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to add co-admin");
+  }
+
+  return response.json().then((data) => data.admin);
+}
+
+export async function removeCoAdmin(chamaId: string, adminId: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/admin/co-admin/${adminId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to remove co-admin");
+  }
+
+  return response.json();
+}
+
+export async function approveJoinRequest(chamaId: string, requestId: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/join-requests/${requestId}/approve`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to approve join request");
+  }
+
+  return response.json();
+}
+
+export async function rejectJoinRequest(chamaId: string, requestId: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/join-requests/${requestId}/reject`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to reject join request");
+  }
+
+  return response.json();
+}
+
+export async function toggleChamaVisibility(chamaId: string, newType: "private" | "public") {
+  const response = await fetch(`/api/chamas/${chamaId}/visibility`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ type: newType }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to update visibility");
+  }
+
+  return response.json();
+}
+
+export async function generateInviteLink(chamaId: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/invite-link`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to generate invite link");
+  }
+
+  return response.json().then((data) => data.inviteLink);
+}
+
+export async function downloadReceipt(chamaId: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/receipt`, {
+    method: "GET",
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to download receipt");
+  }
+
+  return response.json();
+}
+
+// Savings functions
+export async function fetchSavingsGoals() {
+  const response = await fetch("/api/savings");
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch savings goals");
+  }
+
+  const data = await response.json();
+  return {
+    goals: data.goals,
+    userBalance: data.userBalance // Make sure your API returns this
+  };
+}
+
+export async function createSavingsGoal(goalData: any) {
+  const response = await fetch("/api/savings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(goalData),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to create savings goal");
+  }
+
+  return response.json().then((data) => data.goal);
+}
+
+export async function contributeToSavingsGoal(goalId: string, amount: number) {
+  // Check user balance before making the request
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("Not authenticated");
+  }
+  
+  if (user.balance < amount) {
+    throw new Error("Insufficient balance for this contribution");
+  }
+
+  const response = await fetch(`/api/savings/${goalId}/contribute`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ amount }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to contribute to savings goal");
+  }
+
+  return response.json();
+}
+
+// Loans functions
+export async function fetchLoans() {
+  const response = await fetch("/api/loans");
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch loans");
+  }
+
+  const data = await response.json();
+  return data.loans;
+}
+
+export async function requestLoan(loanData: any) {
+  const response = await fetch("/api/loans", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(loanData),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to request loan");
+  }
+
+  return response.json().then((data) => data.loan);
+}
+
+export async function repayLoan(loanId: string, amount: number) {
+  // Check user balance before making the request
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("Not authenticated");
+  }
+  
+  if (user.balance < amount) {
+    throw new Error("Insufficient balance for loan repayment");
+  }
+
+  const response = await fetch(`/api/loans/${loanId}/repay`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ amount }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to repay loan");
+  }
+
+  return response.json();
+}
+
+// Investments functions
+export async function fetchInvestments() {
+  const response = await fetch("/api/investments");
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch investments");
+  }
+
+  const data = await response.json();
+  return data.investments;
+}
+
+export async function createInvestment(investmentData: any) {
+  // Check user balance before making the request
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("Not authenticated");
+  }
+  
+  if (user.balance < investmentData.amount) {
+    throw new Error("Insufficient balance for this investment");
+  }
+
+  const response = await fetch("/api/investments", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(investmentData),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to create investment");
+  }
+
+  return response.json().then((data) => data.investment);
+}
+
+// Payments functions
+export async function sendMoney(recipientPhone: string, amount: number, description: string) {
+  // Check user balance before making the request
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("Not authenticated");
+  }
+  
+  if (user.balance < amount) {
+    throw new Error("Insufficient balance for this transaction");
+  }
+
+  const response = await fetch("/api/payments/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ recipientPhone, amount, description }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to send money");
+  }
+
+  return response.json();
+}
+
+export async function fetchTransactions() {
+  const response = await fetch("/api/transactions");
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch transactions");
+  }
+
+  const data = await response.json();
+  return data.transactions;
+}
+
 // Update the ChamaDetails interface to match your data structure
 interface ChamaDetails {
   id: string;
@@ -276,7 +746,6 @@ interface ChamaDetails {
   memberCount: number;
   maxMembers: number;
   balance: number;
-  testBalance: number;
   currency: string;
   isAdmin: boolean;
   isPrimaryAdmin: boolean;
@@ -307,390 +776,15 @@ interface ChamaDetails {
   pendingRequests?: number;
 }
 
-// Chat functions
-export async function fetchChatHistory(chamaId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/chat`)
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch chat history")
-  }
-
-  const data = await response.json()
-  return data.messages
+interface WelfareRequest {
+  id: string;
+  chamaId: string;
+  memberId: string;
+  memberName: string;
+  amount: number;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  updatedAt: string;
+  urgency: 'low' | 'medium' | 'high';
 }
-
-export async function fetchChamaBasicInfo(chamaId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/basic`)
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch chama basic info")
-  }
-
-  const data = await response.json()
-  return data.chama
-}
-
-export async function sendChatMessage(chamaId: string, content: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ content }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to send message")
-  }
-
-  return response.json().then((data) => data.message)
-}
-
-// Voting functions
-export async function fetchVotingProposals(chamaId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/proposals`)
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch voting proposals")
-  }
-
-  const data = await response.json()
-  return data.proposals
-}
-
-export async function createProposal(chamaId: string, proposalData: any) {
-  const response = await fetch(`/api/chamas/${chamaId}/proposals`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(proposalData),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to create proposal")
-  }
-
-  return response.json().then((data) => data.proposal)
-}
-
-export async function submitVote(chamaId: string, proposalId: string, option: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/proposals/${proposalId}/vote`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ option }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to submit vote")
-  }
-
-  return response.json()
-}
-
-// Admin functions
-export async function fetchChamaAdminData(chamaId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/admin`)
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch admin data")
-  }
-
-  const data = await response.json()
-  return data.adminData
-}
-
-export async function addCoAdmin(chamaId: string, email: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/admin/co-admin`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ email }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to add co-admin")
-  }
-
-  return response.json().then((data) => data.admin)
-}
-
-export async function removeCoAdmin(chamaId: string, adminId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/admin/co-admin/${adminId}`, {
-    method: "DELETE",
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to remove co-admin")
-  }
-
-  return response.json()
-}
-
-export async function approveJoinRequest(chamaId: string, requestId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/join-requests/${requestId}/approve`, {
-    method: "POST",
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to approve join request")
-  }
-
-  return response.json()
-}
-
-export async function rejectJoinRequest(chamaId: string, requestId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/join-requests/${requestId}/reject`, {
-    method: "POST",
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to reject join request")
-  }
-
-  return response.json()
-}
-
-export async function toggleChamaVisibility(chamaId: string, newType: "private" | "public") {
-  const response = await fetch(`/api/chamas/${chamaId}/visibility`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ type: newType }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to update visibility")
-  }
-
-  return response.json()
-}
-
-export async function generateInviteLink(chamaId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/invite-link`, {
-    method: "POST",
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to generate invite link")
-  }
-
-  return response.json().then((data) => data.inviteLink)
-}
-
-export async function downloadReceipt(chamaId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/receipt`, {
-    method: "GET",
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to download receipt")
-  }
-
-  return response.json()
-}
-
-// Savings functions
-export async function fetchSavingsGoals() {
-  const response = await fetch("/api/savings")
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch savings goals")
-  }
-
-  const data = await response.json()
-  return data.goals
-}
-
-export async function createSavingsGoal(goalData: any) {
-  const response = await fetch("/api/savings", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(goalData),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to create savings goal")
-  }
-
-  return response.json().then((data) => data.goal)
-}
-
-export async function contributeToSavingsGoal(goalId: string, amount: number) {
-  // Check user balance before making the request
-  const user = await getCurrentUser()
-  if (!user) {
-    throw new Error("Not authenticated")
-  }
-  
-  if (user.balance < amount) {
-    throw new Error("Insufficient balance for this contribution")
-  }
-
-  const response = await fetch(`/api/savings/${goalId}/contribute`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ amount }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to contribute to savings goal")
-  }
-
-  return response.json()
-}
-
-// Loans functions
-export async function fetchLoans() {
-  const response = await fetch("/api/loans")
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch loans")
-  }
-
-  const data = await response.json()
-  return data.loans
-}
-
-export async function requestLoan(loanData: any) {
-  const response = await fetch("/api/loans", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(loanData),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to request loan")
-  }
-
-  return response.json().then((data) => data.loan)
-}
-
-export async function repayLoan(loanId: string, amount: number) {
-  // Check user balance before making the request
-  const user = await getCurrentUser()
-  if (!user) {
-    throw new Error("Not authenticated")
-  }
-  
-  if (user.balance < amount) {
-    throw new Error("Insufficient balance for loan repayment")
-  }
-
-  const response = await fetch(`/api/loans/${loanId}/repay`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ amount }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to repay loan")
-  }
-
-  return response.json()
-}
-
-// Investments functions
-export async function fetchInvestments() {
-  const response = await fetch("/api/investments")
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch investments")
-  }
-
-  const data = await response.json()
-  return data.investments
-}
-
-export async function createInvestment(investmentData: any) {
-  // Check user balance before making the request
-  const user = await getCurrentUser()
-  if (!user) {
-    throw new Error("Not authenticated")
-  }
-  
-  if (user.balance < investmentData.amount) {
-    throw new Error("Insufficient balance for this investment")
-  }
-
-  const response = await fetch("/api/investments", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(investmentData),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to create investment")
-  }
-
-  return response.json().then((data) => data.investment)
-}
-
-// Payments functions
-export async function sendMoney(recipientPhone: string, amount: number, description: string) {
-  // Check user balance before making the request
-  const user = await getCurrentUser()
-  if (!user) {
-    throw new Error("Not authenticated")
-  }
-  
-  if (user.balance < amount) {
-    throw new Error("Insufficient balance for this transaction")
-  }
-
-  const response = await fetch("/api/payments/send", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ recipientPhone, amount, description }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to send money")
-  }
-
-  return response.json()
-}
-
-export async function fetchTransactions() {
-  const response = await fetch("/api/transactions")
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch transactions")
-  }
-
-  const data = await response.json()
-  return data.transactions
-}
-

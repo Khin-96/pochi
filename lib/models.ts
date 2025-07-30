@@ -8,7 +8,6 @@ export interface User {
   password: string // This would be hashed in a real application
   createdAt: Date
   balance: number
-  testingBalance: number
 }
 
 export interface Chama {
@@ -22,7 +21,6 @@ export interface Chama {
   maxMembers: number
   memberCount: number
   balance: number
-  testBalance: number
   createdAt: Date
   createdBy: string // User ID
   members: ChamaMember[]

@@ -18,6 +18,18 @@ const COLLECTIONS = {
   PESABOT_CHATS: "pesabot_chats",
 }
 
+// Add this new function at the top of the file
+export async function connectToDatabase() {
+  try {
+    const client = await clientPromise
+    const db = client.db(DB_NAME)
+    return { client, db }
+  } catch (error) {
+    console.error("Database connection error:", error)
+    throw new Error("Failed to connect to database")
+  }
+}
+
 // User functions
 export async function createUser(userData: Omit<User, "_id" | "createdAt" | "balance">) {
   const client = await clientPromise
@@ -36,7 +48,7 @@ export async function createUser(userData: Omit<User, "_id" | "createdAt" | "bal
     ...userData,
     password: hashedPassword,
     createdAt: new Date(),
-    balance: 1000, // Single balance field with initial 1000 KES
+    balance: 0, 
   }
 
   const result = await db.collection(COLLECTIONS.USERS).insertOne(newUser)
