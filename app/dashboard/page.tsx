@@ -20,7 +20,6 @@ interface DashboardData {
   }
   wallet: {
     balance: number
-    testingBalance: number
     currency: string
   }
   chamas: Array<{

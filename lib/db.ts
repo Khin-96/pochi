@@ -43,19 +43,19 @@ export async function createUser(userData: Omit<User, "_id" | "createdAt" | "bal
   return { ...newUser, _id: result.insertedId }
 }
 
-export async function findUserByEmail(email: string) {
+export async function findUserByEmail(email: string): Promise<User | null> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
-  return db.collection(COLLECTIONS.USERS).findOne({ email }) as Promise<User | null>
+  return db.collection(COLLECTIONS.USERS).findOne({ email })
 }
 
-export async function findUserById(id: string) {
+export async function findUserById(id: string): Promise<User | null> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
-  return db.collection(COLLECTIONS.USERS).findOne({ _id: new ObjectId(id) }) as Promise<User | null>
+  return db.collection(COLLECTIONS.USERS).findOne({ _id: new ObjectId(id) })
 }
 
-export async function verifyUserCredentials(email: string, password: string) {
+export async function verifyUserCredentials(email: string, password: string): Promise<Omit<User, "password"> | null> {
   const user = await findUserByEmail(email)
   if (!user) return null
 
@@ -67,7 +67,7 @@ export async function verifyUserCredentials(email: string, password: string) {
   return userWithoutPassword
 }
 
-export async function updateUserBalance(userId: string, amount: number) {
+export async function updateUserBalance(userId: string, amount: number): Promise<boolean> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
 
@@ -83,7 +83,7 @@ export async function createChama(
   chamaData: Omit<Chama, "_id" | "createdAt" | "memberCount" | "balance" | "members">,
   userId: string,
   userName: string,
-) {
+): Promise<Chama & { _id: ObjectId }> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
 
@@ -107,26 +107,28 @@ export async function createChama(
   return { ...newChama, _id: result.insertedId }
 }
 
-export async function findChamaById(id: string) {
+export async function findChamaById(id: string): Promise<Chama | null> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
-  return db.collection(COLLECTIONS.CHAMAS).findOne({ _id: new ObjectId(id) }) as Promise<Chama | null>
+  return db.collection(COLLECTIONS.CHAMAS).findOne({ _id: new ObjectId(id) })
 }
 
-export async function findChamasByUserId(userId: string) {
+export async function findChamasByUserId(userId: string): Promise<Chama[]> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
-  return db.collection(COLLECTIONS.CHAMAS).find({ "members.userId": userId }).toArray() as Promise<Chama[]>
+  return db.collection(COLLECTIONS.CHAMAS).find({ "members.userId": userId }).toArray()
 }
 
-export async function findPublicChamas() {
+export async function findPublicChamas(): Promise<Chama[]> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
-  return db.collection(COLLECTIONS.CHAMAS).find({ type: "public" }).toArray() as Promise<Chama[]>
+  return db.collection(COLLECTIONS.CHAMAS).find({ type: "public" }).toArray()
 }
 
 // Transaction functions
-export async function createTransaction(transactionData: Omit<Transaction, "_id">) {
+export async function createTransaction(
+  transactionData: Omit<Transaction, "_id">
+): Promise<Transaction & { _id: ObjectId }> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
 
@@ -134,22 +136,28 @@ export async function createTransaction(transactionData: Omit<Transaction, "_id"
   return { ...transactionData, _id: result.insertedId }
 }
 
-export async function findTransactionsByUserId(userId: string) {
+export async function findTransactionsByUserId(userId: string): Promise<Transaction[]> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
-  return db.collection(COLLECTIONS.TRANSACTIONS).find({ userId }).sort({ date: -1 }).toArray() as Promise<Transaction[]>
+  return db.collection(COLLECTIONS.TRANSACTIONS)
+    .find({ userId })
+    .sort({ date: -1 })
+    .toArray()
 }
 
-export async function findTransactionsByChamaId(chamaId: string) {
+export async function findTransactionsByChamaId(chamaId: string): Promise<Transaction[]> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
-  return db.collection(COLLECTIONS.TRANSACTIONS).find({ chamaId }).sort({ date: -1 }).toArray() as Promise<
-    Transaction[]
-  >
+  return db.collection(COLLECTIONS.TRANSACTIONS)
+    .find({ chamaId })
+    .sort({ date: -1 })
+    .toArray()
 }
 
 // Join Request functions
-export async function createJoinRequest(joinRequestData: Omit<JoinRequest, "_id">) {
+export async function createJoinRequest(
+  joinRequestData: Omit<JoinRequest, "_id">
+): Promise<JoinRequest & { _id: ObjectId }> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
 
@@ -168,15 +176,18 @@ export async function createJoinRequest(joinRequestData: Omit<JoinRequest, "_id"
   return { ...joinRequestData, _id: result.insertedId }
 }
 
-export async function findPendingJoinRequestsByChamaId(chamaId: string) {
+export async function findPendingJoinRequestsByChamaId(chamaId: string): Promise<JoinRequest[]> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
-  return db.collection(COLLECTIONS.JOIN_REQUESTS).find({ chamaId, status: "pending" }).toArray() as Promise<
-    JoinRequest[]
-  >
+  return db.collection(COLLECTIONS.JOIN_REQUESTS)
+    .find({ chamaId, status: "pending" })
+    .toArray()
 }
 
-export async function updateJoinRequestStatus(requestId: string, status: "approved" | "rejected") {
+export async function updateJoinRequestStatus(
+  requestId: string, 
+  status: "approved" | "rejected"
+): Promise<boolean> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
 
@@ -213,7 +224,7 @@ export async function updateJoinRequestStatus(requestId: string, status: "approv
 export async function createLoanRequest(
   loanData: Omit<Loan, "_id" | "status" | "requestDate" | "payments">,
   userId: string,
-) {
+): Promise<Loan & { _id: ObjectId }> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
 
@@ -229,17 +240,20 @@ export async function createLoanRequest(
   return { ...newLoan, _id: result.insertedId }
 }
 
-export async function findLoansByUserId(userId: string) {
+export async function findLoansByUserId(userId: string): Promise<Loan[]> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
-  return db.collection(COLLECTIONS.LOANS).find({ userId }).sort({ requestDate: -1 }).toArray() as Promise<Loan[]>
+  return db.collection(COLLECTIONS.LOANS)
+    .find({ userId })
+    .sort({ requestDate: -1 })
+    .toArray()
 }
 
 // Savings Goal functions
 export async function createSavingsGoal(
   goalData: Omit<SavingsGoal, "_id" | "createdAt" | "currentAmount">,
   userId: string,
-) {
+): Promise<SavingsGoal & { _id: ObjectId }> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
 
@@ -254,15 +268,16 @@ export async function createSavingsGoal(
   return { ...newGoal, _id: result.insertedId }
 }
 
-export async function findSavingsGoalsByUserId(userId: string) {
+export async function findSavingsGoalsByUserId(userId: string): Promise<SavingsGoal[]> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
-  return db.collection(COLLECTIONS.SAVINGS_GOALS).find({ userId }).sort({ createdAt: -1 }).toArray() as Promise<
-    SavingsGoal[]
-  >
+  return db.collection(COLLECTIONS.SAVINGS_GOALS)
+    .find({ userId })
+    .sort({ createdAt: -1 })
+    .toArray()
 }
 
-export async function updateSavingsGoal(goalId: string, amount: number) {
+export async function updateSavingsGoal(goalId: string, amount: number): Promise<boolean> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
 
@@ -277,7 +292,7 @@ export async function updateSavingsGoal(goalId: string, amount: number) {
 export async function createInvestment(
   investmentData: Omit<Investment, "_id" | "purchaseDate" | "lastUpdated" | "currentValue">,
   userId: string,
-) {
+): Promise<Investment & { _id: ObjectId }> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
 
@@ -294,16 +309,17 @@ export async function createInvestment(
   return { ...newInvestment, _id: result.insertedId }
 }
 
-export async function findInvestmentsByUserId(userId: string) {
+export async function findInvestmentsByUserId(userId: string): Promise<Investment[]> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
-  return db.collection(COLLECTIONS.INVESTMENTS).find({ userId }).sort({ purchaseDate: -1 }).toArray() as Promise<
-    Investment[]
-  >
+  return db.collection(COLLECTIONS.INVESTMENTS)
+    .find({ userId })
+    .sort({ purchaseDate: -1 })
+    .toArray()
 }
 
 // PesaBot Chat functions
-export async function savePesaBotChat(userId: string, messages: any[]) {
+export async function savePesaBotChat(userId: string, messages: any[]): Promise<{ success: boolean }> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
 
@@ -336,10 +352,9 @@ export async function savePesaBotChat(userId: string, messages: any[]) {
   }
 }
 
-export async function getPesaBotChat(userId: string) {
+export async function getPesaBotChat(userId: string): Promise<any> {
   const client = await clientPromise
   const db = client.db(DB_NAME)
 
-  const chat = await db.collection(COLLECTIONS.PESABOT_CHATS).findOne({ userId })
-  return chat
+  return db.collection(COLLECTIONS.PESABOT_CHATS).findOne({ userId })
 }

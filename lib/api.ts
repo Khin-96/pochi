@@ -185,25 +185,31 @@ export async function fetchDashboardData() {
 
 // Chama functions
 export async function fetchChamas() {
-  const response = await fetch("/api/chamas")
+  const response = await fetch("/api/chamas");
 
   if (!response.ok) {
-    throw new Error("Failed to fetch chamas")
+    throw new Error("Failed to fetch chamas");
   }
 
-  const data = await response.json()
-  return data.chamas
+  const data = await response.json();
+  return data.chamas.map((chama: any) => ({
+    ...chama,
+    id: chama._id || chama.id
+  }));
 }
 
 export async function fetchPublicChamas() {
-  const response = await fetch("/api/chamas/public")
+  const response = await fetch("/api/chamas/public");
 
   if (!response.ok) {
-    throw new Error("Failed to fetch public chamas")
+    throw new Error("Failed to fetch public chamas");
   }
 
-  const data = await response.json()
-  return data.chamas
+  const data = await response.json();
+  return data.chamas.map((chama: any) => ({
+    ...chama,
+    id: chama._id || chama.id
+  }));
 }
 
 export async function createChama(chamaData: any) {
@@ -213,95 +219,92 @@ export async function createChama(chamaData: any) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(chamaData),
-  })
+  });
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to create chama")
+    const error = await response.json();
+    throw new Error(error.message || "Failed to create chama");
   }
 
-  return response.json().then((data) => data.chama)
+  const data = await response.json();
+  return {
+    ...data.chama,
+    id: data.chama._id || data.chama.id
+  };
 }
 
-export async function joinChama(chamaId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/join`, {
-    method: "POST",
-  })
+export async function fetchChamaDetails(chamaId: string): Promise<ChamaDetails> {
+  const response = await fetch(`/api/chamas/${chamaId}`);
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to join chama")
+    throw new Error("Failed to fetch chama details");
   }
 
-  return response.json()
-}
-
-export async function fetchChamaDetails(chamaId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}`)
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch chama details")
-  }
-
-  const data = await response.json()
-  return data.chama
-}
-
-export async function contributeToChama(chamaId: string, amount: number) {
-  // Check user balance before making the request
-  const user = await getCurrentUser()
-  if (!user) {
-    throw new Error("Not authenticated")
-  }
+  const data = await response.json();
   
-  if (user.balance < amount) {
-    throw new Error("Insufficient balance for this contribution")
-  }
+  // Transform the chama data to match the expected interface
+  const transformedChama = {
+    ...data.chama,
+    id: data.chama._id || data.chama.id,
+    members: data.chama.members?.map((member: any) => ({
+      ...member,
+      id: member._id || member.id,
+      userId: member.userId?._id || member.userId
+    })) || [],
+    transactions: data.chama.transactions?.map((txn: any) => ({
+      ...txn,
+      id: txn._id || txn.id,
+      date: txn.date ? new Date(txn.date).toISOString() : new Date().toISOString()
+    })) || [],
+    nextContribution: data.chama.nextContribution || {
+      amount: data.chama.contributionAmount || 0,
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // Default 30 days from now
+    }
+  };
 
-  const response = await fetch(`/api/chamas/${chamaId}/contribute`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ amount }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to contribute to chama")
-  }
-
-  return response.json()
+  return transformedChama;
 }
 
-export async function requestWelfare(chamaId: string, amount: number, reason: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/welfare`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ amount, reason }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to request welfare")
-  }
-
-  return response.json()
-}
-
-export async function leaveChama(chamaId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/leave`, {
-    method: "POST",
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to leave chama")
-  }
-
-  return response.json()
+// Update the ChamaDetails interface to match your data structure
+interface ChamaDetails {
+  id: string;
+  _id: string;
+  name: string;
+  type: "private" | "public";
+  description: string;
+  rules: string;
+  memberCount: number;
+  maxMembers: number;
+  balance: number;
+  testBalance: number;
+  currency: string;
+  isAdmin: boolean;
+  isPrimaryAdmin: boolean;
+  contributionAmount: number;
+  contributionFrequency: string;
+  nextContribution: {
+    amount: number;
+    dueDate: string;
+  };
+  members: Array<{
+    id: string;
+    userId: string;
+    name: string;
+    avatar?: string;
+    role: "admin" | "member";
+    joinDate: string;
+  }>;
+  transactions: Array<{
+    id: string;
+    type: "contribution" | "welfare" | "investment" | "payout";
+    amount: number;
+    description: string;
+    date: string;
+    memberId: string;
+    memberName: string;
+    isTest: boolean;
+  }>;
+  pendingRequests?: number;
 }
 
 // Chat functions

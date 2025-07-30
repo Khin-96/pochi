@@ -2,15 +2,27 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { getPesaBotChat, savePesaBotChat } from "@/lib/db"
 
+export const dynamic = 'force-dynamic' // Ensure routes are dynamic if using cookies/auth
+
 export async function GET() {
   try {
     const user = await getCurrentUser()
 
     if (!user) {
-      return NextResponse.json({ success: false, message: "Not authenticated" }, { status: 401 })
+      return NextResponse.json(
+        { success: false, message: "Not authenticated" }, 
+        { status: 401 }
+      )
     }
 
-    const chat = await getPesaBotChat(user._id as string)
+    if (!user._id) {
+      return NextResponse.json(
+        { success: false, message: "User ID not available" },
+        { status: 400 }
+      )
+    }
+
+    const chat = await getPesaBotChat(user._id)
 
     return NextResponse.json({
       success: true,
@@ -33,12 +45,29 @@ export async function POST(req: Request) {
     const user = await getCurrentUser()
 
     if (!user) {
-      return NextResponse.json({ success: false, message: "Not authenticated" }, { status: 401 })
+      return NextResponse.json(
+        { success: false, message: "Not authenticated" }, 
+        { status: 401 }
+      )
+    }
+
+    if (!user._id) {
+      return NextResponse.json(
+        { success: false, message: "User ID not available" },
+        { status: 400 }
+      )
     }
 
     const { messages } = await req.json()
 
-    await savePesaBotChat(user._id as string, messages)
+    if (!messages || !Array.isArray(messages)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid messages format" },
+        { status: 400 }
+      )
+    }
+
+    await savePesaBotChat(user._id, messages)
 
     return NextResponse.json({
       success: true,

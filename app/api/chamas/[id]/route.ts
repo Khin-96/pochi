@@ -1,10 +1,6 @@
-// app/api/chamas/[id]/route.ts
-// This file defines the API endpoint for fetching details of a specific chama by its ID.
-
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth"; // Ensure this path is correct for your authentication utility
-import { findChamaById } from "@/lib/db";   // Ensure this path is correct for your database utility
-                                          // And make sure findChamaById is correctly implemented in lib/db.ts
+import { getCurrentUser } from "@/lib/auth";
+import { findChamaById } from "@/lib/db";
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   console.log(`--- Server: GET /api/chamas/${params.id} request received ---`);
@@ -29,19 +25,20 @@ export async function GET(request: Request, { params }: { params: { id: string }
     console.log(`Server: Attempting to fetch chama with ID: ${chamaId}`);
 
     // 3. Fetch Chama from Database
-    const chama = await findChamaById(chamaId); // This is where the database query happens
+    const chama = await findChamaById(chamaId);
 
     if (!chama) {
       console.log(`Server: Error - Chama with ID ${chamaId} not found in the database.`);
       return NextResponse.json({ success: false, message: "Chama not found" }, { status: 404 });
     }
+
     console.log(`Server: Chama found - Name: "${chama.name}", ID: "${chama._id}"`);
     console.log("Server: Chama members array from DB:", chama.members);
 
-
-    // 4. Authorization Check (Is the authenticated user a member of this chama?)
-    // This is a common source of 403 errors.
-    const isMember = chama.members.some((member: any) => member.userId === (user as any)._id);
+    // 4. Authorization Check
+    const isMember = chama.members.some((member: any) => 
+      member.userId.toString() === user._id.toString()
+    );
 
     if (!isMember) {
       console.log(`Server: Authorization Failed - User ${user._id} is NOT a member of chama "${chama.name}".`);
@@ -50,15 +47,32 @@ export async function GET(request: Request, { params }: { params: { id: string }
         { status: 403 },
       );
     }
-    console.log(`Server: Authorization Granted - User ${user._id} is a member of chama "${chama.name}".`);
 
-    // 5. Success Response
+    // 5. Transform the chama data for the client
+    const transformedChama = {
+      ...chama,
+      id: chama._id.toString(),
+      _id: chama._id.toString(),
+      members: chama.members.map((member: any) => ({
+        ...member,
+        id: member._id?.toString() || member.id,
+        userId: member.userId?.toString(),
+        joinDate: member.joinDate?.toISOString()
+      })),
+      transactions: chama.transactions?.map((transaction: any) => ({
+        ...transaction,
+        id: transaction._id?.toString() || transaction.id,
+        date: transaction.date?.toISOString()
+      })) || []
+    };
+
+    // 6. Success Response
     console.log("Server: Successfully fetched and authorized chama details. Sending response.");
-    return NextResponse.json({ success: true, chama });
+    return NextResponse.json({ success: true, chama: transformedChama });
 
   } catch (error) {
     // 6. Generic Server Error Handling
-    console.error("Server: Unhandled GET /api/chamas/[id] Error:", error); // Log the full error for debugging
+    console.error("Server: Unhandled GET /api/chamas/[id] Error:", error);
     return NextResponse.json(
       {
         success: false,
@@ -70,10 +84,3 @@ export async function GET(request: Request, { params }: { params: { id: string }
     console.log("--- Server: GET /api/chamas/[id] request finished ---");
   }
 }
-
-// If you have a POST handler for this route (e.g., to update the chama), you can place it here:
-/*
-export async function POST(req: Request, { params }: { params: { id: string } }) {
-  // ... your POST logic ...
-}
-*/
