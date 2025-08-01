@@ -1,13 +1,17 @@
+// app/api/chamas/[id]/chat/route.ts
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import { connectToDatabase } from "@/lib/db"
 import { ObjectId } from "mongodb"
+import { pusherServer } from "@/lib/pusher"
 
-export async function GET(
+// POST /api/chamas/:id/chat - Send a new message
+export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    // 1. Authenticate the user
     const user = await getCurrentUser()
     if (!user?._id) {
       return NextResponse.json(
@@ -16,6 +20,7 @@ export async function GET(
       )
     }
 
+    // 2. Validate the chama ID parameter
     const { id: chamaId } = params
     if (!ObjectId.isValid(chamaId)) {
       return NextResponse.json(
@@ -24,45 +29,54 @@ export async function GET(
       )
     }
 
+    // 3. Parse request body
+    const { content } = await request.json()
+    if (!content || typeof content !== 'string') {
+      return NextResponse.json(
+        { error: "Message content is required" },
+        { status: 400 }
+      )
+    }
+
+    // 4. Connect to database
     const { db } = await connectToDatabase()
     if (!db) {
       throw new Error("Database connection failed")
     }
 
-    // Check if user is a member of this chama
-    const isMember = await db.collection("chamas").countDocuments({
-      _id: new ObjectId(chamaId),
-      "members.userId": new ObjectId(user._id)
-    })
+    // 5. Create message document
+    const message = {
+      chamaId: new ObjectId(chamaId),
+      senderId: user._id,
+      senderName: user.name,
+      senderAvatar: user.avatar,
+      content,
+      timestamp: new Date(),
+      isPesaBot: false,
+    };
 
-    if (!isMember) {
-      return NextResponse.json(
-        { error: "Chama not found or access denied" },
-        { status: 404 }
-      )
-    }
+    // 6. Insert message into database
+    const result = await db.collection("chama_messages").insertOne(message)
+    const insertedMessage = {
+      ...message,
+      _id: result.insertedId,
+    };
 
-    const messages = await db
-      .collection("chama_messages")
-      .find({ chamaId: new ObjectId(chamaId) })
-      .sort({ timestamp: -1 })
-      .limit(50)
-      .toArray()
+    // 7. Trigger Pusher event
+    await pusherServer.trigger(`chama-${chamaId}`, 'new-message', {
+      id: insertedMessage._id.toString(),
+      senderId: insertedMessage.senderId,
+      senderName: insertedMessage.senderName,
+      senderAvatar: insertedMessage.senderAvatar,
+      content: insertedMessage.content,
+      timestamp: insertedMessage.timestamp.toISOString(),
+      isPesaBot: insertedMessage.isPesaBot,
+    });
 
-    return NextResponse.json({
-      messages: messages.map(msg => ({
-        id: msg._id.toString(),
-        senderId: msg.senderId.toString(),
-        senderName: msg.senderName,
-        senderAvatar: msg.senderAvatar,
-        content: msg.content,
-        timestamp: msg.timestamp.toISOString(),
-        isPesaBot: msg.isPesaBot || false
-      })).reverse()
-    })
+    return NextResponse.json({ message: "Message sent successfully" })
 
   } catch (error) {
-    console.error("Chat History Error:", error)
+    console.error("Send Message Error:", error)
     return NextResponse.json(
       { 
         error: "Internal server error",

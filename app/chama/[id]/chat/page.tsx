@@ -12,6 +12,7 @@ import { ArrowLeft, Send, PaperclipIcon, Bot } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { getToken } from "@/lib/auth"
 import ChatSkeleton from "@/components/chat-skeleton"
+import { pusherClient } from "@/lib/pusher"
 
 interface ChatMessage {
   id: string
@@ -42,7 +43,6 @@ export default function ChamaChatPage() {
   const [newMessage, setNewMessage] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [isSending, setIsSending] = useState(false)
-  const [socket, setSocket] = useState<WebSocket | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected" | "error">("disconnected")
   const reconnectAttemptsRef = useRef(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -60,37 +60,35 @@ export default function ChamaChatPage() {
   }
 
   // Fetch initial chat history
-  const fetchChatHistory = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/chamas/${chamaId}/chat`, {
-        credentials: 'include'
-      })
-      
-      if (res.status === 401) {
-        router.push('/login')
-        return
-      }
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || "Failed to fetch chat history")
-      }
-
-      const data = await res.json()
-      setMessages(data.messages || [])
-    } catch (error) {
-      console.error("Chat history error:", error)
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to load chat",
-        variant: "destructive",
-      })
-      
-      if (error instanceof Error && error.message.includes("Unauthorized")) {
-        router.push('/login')
-      }
+ const fetchChatHistory = useCallback(async () => {
+  try {
+    setIsLoading(true);
+    const res = await fetch(`/api/chamas/${chamaId}/chat`, {
+      credentials: 'include'
+    });
+    
+    if (res.status === 401) {
+      router.push('/login');
+      return;
     }
-  }, [chamaId, router, toast])
+
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+
+    const data = await res.json();
+    setMessages(data.messages || []);
+  } catch (error) {
+    console.error("Chat history error:", error);
+    toast({
+      title: "Error",
+      description: error instanceof Error ? error.message : "Failed to load chat",
+      variant: "destructive",
+    });
+  } finally {
+    setIsLoading(false);
+  }
+}, [chamaId, router, toast]);
 
   const fetchChamaInfo = useCallback(async () => {
     try {
@@ -126,129 +124,111 @@ export default function ChamaChatPage() {
     }
   }, [chamaId, router, toast])
 
-  // WebSocket connection with enhanced error handling
-  const setupWebSocket = useCallback(async () => {
-    try {
-      setConnectionStatus("connecting")
-      const token = await getToken()
-      
-      if (!token) {
-        toast({
-          title: "Session expired",
-          description: "Please login again",
-          variant: "destructive",
-        })
-        router.push("/login")
-        return null
-      }
+  // Setup Pusher connection
+const setupPusher = useCallback(async () => {
+  try {
+    setConnectionStatus("connecting");
+    
+    const token = await getToken();
+    if (!token) {
+      toast({
+        title: "Session expired",
+        description: "Please login again",
+        variant: "destructive",
+      });
+      router.push("/login");
+      return;
+    }
 
-      const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://"
-      const wsUrl = `${wsProtocol}${window.location.host}/api/chamas/${chamaId}/ws?token=${encodeURIComponent(token)}`
-      
-      const ws = new WebSocket(wsUrl)
-
-      // Connection opened
-      ws.onopen = () => {
-        console.log("WebSocket connected successfully")
-        setSocket(ws)
-        setConnectionStatus("connected")
-        reconnectAttemptsRef.current = 0 // Reset reconnect attempts
-      }
-
-      // Message received
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data)
-          console.log("WebSocket message received:", message)
-          
-          // Remove temporary message if exists
-          setMessages(prev => prev.filter(msg => !msg.id.startsWith('temp-')).concat(message))
-        } catch (error) {
-          console.error("Error parsing WebSocket message:", error, "Raw data:", event.data)
+      // Initialize Pusher connection
+       pusherClient.signin({
+      authEndpoint: '/api/pusher/auth',
+      auth: {
+        headers: {
+          Authorization: `Bearer ${token}`
         }
       }
+    });
 
-      // Connection error
-      ws.onerror = (error) => {
-        console.error("WebSocket error details:", {
-          error,
-          readyState: ws.readyState,
-          url: wsUrl,
-          timestamp: new Date().toISOString()
-        })
-        
-        setConnectionStatus("error")
+      // Subscribe to the channel
+      const channel = pusherClient.subscribe(`chama-${chamaId}`);
+
+      // Bind to new message event
+      channel.bind('new-message', (message: ChatMessage) => {
+        setMessages(prev => {
+          // Remove temporary message if exists and add new message
+          const filtered = prev.filter(msg => !msg.id.startsWith('temp-'));
+          return [...filtered, message];
+        });
+      });
+
+      pusherClient.connection.bind('connected', () => {
+        console.log("Pusher connected successfully");
+        setConnectionStatus("connected");
+        reconnectAttemptsRef.current = 0;
+      });
+
+      pusherClient.connection.bind('error', (error: any) => {
+        console.error("Pusher error:", error);
+        setConnectionStatus("error");
         toast({
           title: "Connection error",
-          description: "Chat connection failed. Trying to reconnect...",
+          description: "Failed to connect to chat server",
           variant: "destructive",
-        })
-      }
+        });
+      });
 
-      // Connection closed
-      ws.onclose = (event) => {
-        console.log("WebSocket closed:", {
-          code: event.code,
-          reason: event.reason,
-          wasClean: event.wasClean,
-          timestamp: new Date().toISOString()
-        })
-
-        setSocket(null)
-        setConnectionStatus("disconnected")
-        
-        // Only attempt reconnect if closure was unexpected
-        if (event.code !== 1000 && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+      pusherClient.connection.bind('disconnected', () => {
+        console.log("Pusher disconnected");
+        setConnectionStatus("disconnected");
+        if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
           const delay = Math.min(
             RECONNECT_DELAY_BASE * Math.pow(2, reconnectAttemptsRef.current),
             30000 // Max 30 seconds delay
-          )
-          
-          console.log(`Attempting reconnect in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1})`)
+          );
           
           setTimeout(() => {
-            reconnectAttemptsRef.current += 1
-            setupWebSocket()
-          }, delay)
+            reconnectAttemptsRef.current += 1;
+            setupPusher();
+          }, delay);
         }
-      }
+      });
 
-      return ws
+      return () => {
+        channel.unbind_all();
+        channel.unsubscribe();
+      };
+
     } catch (error) {
-      console.error("WebSocket setup failed:", error)
-      setConnectionStatus("error")
+      console.error("Pusher setup failed:", error);
+      setConnectionStatus("error");
       toast({
         title: "Connection error",
-        description: "Failed to setup chat connection",
+        description: error instanceof Error ? error.message : "Failed to setup chat connection",
         variant: "destructive",
-      })
-      return null
+      });
     }
-  }, [chamaId, toast, router])
+  }, [chamaId, toast, router]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Initialize chat and WebSocket
+  // Initialize chat and Pusher
   useEffect(() => {
     fetchChatHistory()
     fetchChamaInfo()
-    const wsPromise = setupWebSocket()
+    const cleanupPromise = setupPusher()
 
     return () => {
-      wsPromise.then(ws => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.close()
-        }
-      })
+      cleanupPromise.then(cleanup => cleanup?.())
     }
-  }, [fetchChatHistory, fetchChamaInfo, setupWebSocket])
+  }, [fetchChatHistory, fetchChamaInfo, setupPusher])
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newMessage.trim() || !socket || socket.readyState !== WebSocket.OPEN) return
+    if (!newMessage.trim()) return
 
     setIsSending(true)
     const tempId = `temp-${Date.now()}`
@@ -265,12 +245,20 @@ export default function ChamaChatPage() {
       setMessages(prev => [...prev, tempMessage])
       setNewMessage("")
 
-      // Send message
-      socket.send(JSON.stringify({
-        content: newMessage,
-        senderId: "current-user",
-        senderName: "You"
-      }))
+      // Send message via API
+      const res = await fetch(`/api/chamas/${chamaId}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: newMessage,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to send message");
+      }
 
       // If the message hasn't been replaced by a server message after 5 seconds,
       // consider it failed and remove the optimistic update
@@ -407,17 +395,17 @@ export default function ChamaChatPage() {
               <PaperclipIcon className="h-5 w-5" />
             </Button>
             <Input
-              placeholder="Type a message..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              className="flex-1"
-              disabled={!socket || socket.readyState !== WebSocket.OPEN}
-            />
+  placeholder="Type a message..."
+  value={newMessage}
+  onChange={(e) => setNewMessage(e.target.value)}
+  className="flex-1"
+  disabled={isSending}
+/>
             <Button
               type="submit"
               size="icon"
               className="shrink-0 bg-green-600 hover:bg-green-700"
-              disabled={isSending || !newMessage.trim() || !socket || socket.readyState !== WebSocket.OPEN}
+              disabled={isSending || !newMessage.trim()}
             >
               <Send className="h-5 w-5" />
             </Button>

@@ -177,56 +177,117 @@ export default function PaymentsPage() {
     }
   };
 
-  const handleConfirmSend = async () => {
-    if (!user) return;
-    
-    const values = form.getValues();
-    const identifier = values.recipientType === "phone" 
-      ? values.recipientPhone 
-      : values.recipientEmail;
-    
-    if (!identifier) return;
+const handleConfirmSend = async () => {
+  if (!user) {
+    toast({
+      title: "Session expired",
+      description: "Please login again to continue",
+      variant: "destructive",
+    });
+    return;
+  }
 
-    setIsSending(true);
+  const values = form.getValues();
+  const identifier = values.recipientType === "phone" 
+    ? values.recipientPhone 
+    : values.recipientEmail;
+  
+  if (!identifier) {
+    toast({
+      title: "Recipient missing",
+      description: "Please provide recipient details",
+      variant: "destructive",
+    });
+    return;
+  }
 
-    try {
-      const response = await sendMoney(
-        identifier,
-        Number(values.amount),
-        values.description || "",
-        values.recipientType
-      );
+  setIsSending(true);
+  setVerificationError(null);
 
-      toast({
-        title: "Success",
-        description: `${formatCurrency(Number(values.amount))} sent successfully to ${values.recipientName || "recipient"}!`,
+  try {
+    const response = await sendMoney(
+      identifier,
+      Number(values.amount),
+      values.description || "",
+      values.recipientType
+    );
+
+    // Show success message
+    toast({
+      title: "Transfer Successful",
+      description: `${formatCurrency(Number(values.amount))} sent to ${values.recipientName || identifier}`,
+    });
+
+    // Refresh user data and transactions
+    const [updatedUser, updatedTransactions] = await Promise.all([
+      getCurrentUser(),
+      fetchTransactions()
+    ]);
+
+    if (updatedUser) {
+      setUser({
+        ...updatedUser,
+        balance: Number(updatedUser.balance) || 0
       });
-
-      // Refresh data
-      const [updatedUser, updatedTransactions] = await Promise.all([
-        getCurrentUser(),
-        fetchTransactions()
-      ]);
-
-      if (updatedUser && updatedUser.balance) {
-        updatedUser.balance = Number(updatedUser.balance);
-      }
-
-      setUser(updatedUser);
-      setTransactions(Array.isArray(updatedTransactions) ? updatedTransactions : []);
-      form.reset();
-    } catch (error: any) {
-      console.error("Failed to send money:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send money. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSending(false);
-      setShowConfirmation(false);
     }
-  };
+
+    if (Array.isArray(updatedTransactions)) {
+      setTransactions(updatedTransactions);
+    }
+
+    // Reset form
+    form.reset({
+      recipientType: "phone",
+      recipientPhone: "",
+      recipientEmail: "",
+      amount: "",
+      description: "",
+      recipientName: "",
+    });
+
+  } catch (error: any) {
+    console.error("Send money error:", error);
+    
+    let errorMessage = "Failed to complete transaction";
+    let showRetry = false;
+
+    // Handle specific error cases
+    if (error.message.includes("authenticated")) {
+      errorMessage = "Session expired - please login again";
+    } else if (error.message.includes("balance")) {
+      errorMessage = "Insufficient funds for this transaction";
+    } else if (error.message.includes("network")) {
+      errorMessage = "Network error - please check your connection";
+      showRetry = true;
+    } else if (error.message.includes("not found")) {
+      errorMessage = "Recipient account not found";
+    } else {
+      errorMessage = error.message || errorMessage;
+    }
+
+    toast({
+      title: "Transfer Failed",
+      description: errorMessage,
+      variant: "destructive",
+      action: showRetry ? (
+        <Button 
+          variant="ghost" 
+          onClick={handleConfirmSend}
+          className="text-blue-600 hover:text-blue-800"
+        >
+          Retry
+        </Button>
+      ) : undefined,
+    });
+
+    // Store error for form display
+    setVerificationError(errorMessage);
+
+  } finally {
+    setIsSending(false);
+    setShowConfirmation(false);
+  }
+};
 
   const handleCancelSend = () => {
     setShowConfirmation(false);

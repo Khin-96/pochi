@@ -773,31 +773,55 @@ export async function createInvestment(investmentData: any) {
 }
 
 // Payments functions
-export async function sendMoney(recipientPhone: string, amount: number, description: string) {
-  // Check user balance before making the request
-  const user = await getCurrentUser();
-  if (!user) {
-    throw new Error("Not authenticated");
-  }
-  
-  if (user.balance < amount) {
-    throw new Error("Insufficient balance for this transaction");
-  }
+export async function sendMoney(
+  recipientIdentifier: string, 
+  amount: number, 
+  description: string,
+  recipientType: 'phone' | 'email'
+) {
+  try {
+    // First check if we have a valid session
+    const sessionCheck = await fetch('/api/auth/session');
+    if (!sessionCheck.ok) {
+      throw new Error("Not authenticated");
+    }
 
-  const response = await fetch("/api/payments/send", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ recipientPhone, amount, description }),
-  });
+    const response = await fetch("/api/payments/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // Ensure credentials are included
+        credentials: 'include',
+      },
+      body: JSON.stringify({ 
+        recipientIdentifier, 
+        amount, 
+        description,
+        recipientType
+      }),
+    });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || "Failed to send money");
+    if (!response.ok) {
+      let errorMessage = "Failed to send money";
+      try {
+        const error = await response.json();
+        errorMessage = error.message || error.error || errorMessage;
+      } catch (e) {
+        const text = await response.text();
+        if (text) errorMessage = text;
+      }
+      throw new Error(errorMessage);
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error("Payment processing error:", error);
+    throw new Error(
+      error instanceof Error 
+        ? error.message 
+        : "Network error occurred. Please try again."
+    );
   }
-
-  return response.json();
 }
 
 export async function fetchTransactions() {
