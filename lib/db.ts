@@ -1,3 +1,4 @@
+// [file name]: db.ts
 import clientPromise from "./mongodb"
 import { ObjectId } from "mongodb"
 import bcrypt from "bcryptjs"
@@ -267,19 +268,26 @@ export async function findUserByPhone(phone: string): Promise<User | null> {
   const client = await clientPromise;
   const db = client.db(DB_NAME);
   
-  // First try exact match
-  const exactMatch = await db.collection(COLLECTIONS.USERS).findOne({ phone });
-  if (exactMatch) return exactMatch;
-  
-  // If no exact match, try normalizing the phone number
+  // Normalize the phone number for better matching
   const normalizedPhone = normalizePhone(phone);
-  return db.collection(COLLECTIONS.USERS).findOne({ phone: normalizedPhone });
+  
+  // Try to find user by normalized phone
+  const user = await db.collection(COLLECTIONS.USERS).findOne({ 
+    phone: normalizedPhone 
+  });
+  
+  if (user) return user;
+  
+  // If not found with normalized phone, try exact match
+  return db.collection(COLLECTIONS.USERS).findOne({ phone });
 }
 
-// Helper function for phone number normalization
+// Enhanced normalizePhone function
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('254')) {
+  
+  // Handle Kenyan numbers specifically
+  if (digits.startsWith('254') && digits.length === 12) {
     return digits;
   }
   if (digits.startsWith('0') && digits.length === 10) {
@@ -288,6 +296,13 @@ function normalizePhone(phone: string): string {
   if (digits.startsWith('+254')) {
     return digits.substring(1);
   }
+  
+  // For other formats, try to extract the last 9 digits
+  if (digits.length >= 9) {
+    const last9Digits = digits.substring(digits.length - 9);
+    return '254' + last9Digits;
+  }
+  
   return digits;
 }
 
@@ -400,6 +415,9 @@ export async function getPesaBotChat(userId: string): Promise<any> {
 
   return db.collection(COLLECTIONS.PESABOT_CHATS).findOne({ userId })
 }
+
+// REMOVE OR COMMENT OUT THE INCORRECT getCurrentUser FUNCTION
+/*
 export async function getCurrentUser(): Promise<User | null> {
   // Implementation from your auth file
   const response = await fetch("/api/auth/user");
@@ -409,3 +427,4 @@ export async function getCurrentUser(): Promise<User | null> {
   const data = await response.json();
   return data.user;
 }
+*/

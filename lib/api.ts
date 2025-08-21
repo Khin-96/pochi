@@ -49,23 +49,28 @@ export async function logout() {
   return response.json();
 }
 
-export async function getCurrentUser() {
+export async function getCurrentUser(): Promise<User | null> {
   try {
-    const response = await fetch("/api/auth/user", {
+    // Use NextAuth session instead of custom endpoint
+    const response = await fetch("/api/auth/session", {
       credentials: 'include',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      }
     });
     
     if (!response.ok) {
       return null;
     }
 
-    const user = await response.json();
-    return user || null;
+    const session = await response.json();
+    return session.user || null;
   } catch (error) {
     console.error("Failed to fetch current user:", error);
     return null;
   }
 }
+
 
 export async function forgotPassword(email: string) {
   const response = await fetch("/api/auth/forgot-password", {
@@ -654,6 +659,7 @@ export async function verifyRecipient(
   verified: boolean;
   type: 'phone' | 'email';
   identifier: string;
+  message?: string;
 }> {
   try {
     const response = await fetch('/api/payments/verify-recipient', {
@@ -665,33 +671,24 @@ export async function verifyRecipient(
       body: JSON.stringify({ identifier, type }),
     });
 
-    // Check if the response is JSON
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const text = await response.text();
-      console.error('Invalid response format:', text.substring(0, 100));
-      throw new Error('Server returned an invalid response format');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Recipient verification failed');
     }
 
     const data = await response.json();
     
-    if (!response.ok) {
-      throw new Error(data.message || 'Recipient verification failed');
-    }
-
-    if (!data.verified) {
-      throw new Error(data.message || 'Recipient not found');
-    }
-
     return {
       name: data.name || 'Verified User',
-      verified: true,
+      verified: data.verified || false,
       type,
-      identifier
+      identifier,
+      message: data.message
     };
   } catch (error) {
     console.error('Verification error:', error);
-    // Return a mock response in development if the endpoint doesn't exist
+    
+    // In development, allow testing with mock data
     if (process.env.NODE_ENV === 'development') {
       console.warn('Using mock verification response in development');
       return {
@@ -701,6 +698,7 @@ export async function verifyRecipient(
         identifier
       };
     }
+    
     throw new Error(
       error instanceof Error 
         ? error.message 
@@ -811,7 +809,7 @@ export async function createInvestment(investmentData: any) {
   return response.json().then((data) => data.investment);
 }
 
-// Payments functions
+// Payments functions - UPDATED to use session only
 export async function sendMoney(requestData: any) {
   try {
     const response = await fetch("/api/payments/send", {
@@ -819,11 +817,16 @@ export async function sendMoney(requestData: any) {
       headers: {
         "Content-Type": "application/json",
       },
-      credentials: 'include',
+      credentials: 'include', // This ensures session cookies are sent
       body: JSON.stringify(requestData),
     });
 
     if (!response.ok) {
+      // Handle 401 specifically
+      if (response.status === 401) {
+        throw new Error("Session expired. Please login again.");
+      }
+      
       const errorData = await response.json();
       if (errorData.issues) {
         const validationErrors = errorData.issues

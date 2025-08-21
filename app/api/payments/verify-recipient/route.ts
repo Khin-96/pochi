@@ -1,13 +1,11 @@
-// app/api/payments/verify-recipient/route.ts
+// [file name]: route.ts
 import { NextResponse } from 'next/server';
 import { findUserByEmail, findUserByPhone } from '@/lib/db';
 
 // Helper function to normalize phone numbers
 const normalizePhone = (phone: string): string => {
-  // Remove all non-digit characters
   const digits = phone.replace(/\D/g, '');
   
-  // Handle Kenyan numbers specifically
   if (digits.startsWith('254')) {
     return digits;
   }
@@ -34,11 +32,13 @@ export async function POST(req: Request) {
     let user;
     if (type === 'phone') {
       const normalizedPhone = normalizePhone(identifier);
-      // Try both normalized and original formats
-      user = await findUserByPhone(normalizedPhone) || 
-             await findUserByPhone(identifier);
+      user = await findUserByPhone(normalizedPhone);
+      
+      // If not found with normalized phone, try the original
+      if (!user) {
+        user = await findUserByPhone(identifier);
+      }
     } else {
-      // For email, just use the exact match (case insensitive)
       user = await findUserByEmail(identifier.toLowerCase().trim());
     }
 
@@ -49,6 +49,21 @@ export async function POST(req: Request) {
           message: 'Recipient not found'
         },
         { status: 404 }
+      );
+    }
+
+    // Check if user is trying to send to themselves
+    // This check should be done in the frontend, but we'll add it here for security
+    const currentUser = await getCurrentUser(); // You'll need to implement this
+    if (currentUser && 
+        ((type === 'phone' && user.phone === currentUser.phone) || 
+         (type === 'email' && user.email === currentUser.email))) {
+      return NextResponse.json(
+        { 
+          verified: false,
+          message: 'Cannot send money to yourself'
+        },
+        { status: 400 }
       );
     }
 

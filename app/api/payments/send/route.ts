@@ -1,7 +1,6 @@
 // app/api/payments/send/route.ts
 import { NextResponse } from 'next/server';
 import { 
-   
   findUserById, 
   findUserByEmail, 
   findUserByPhone,
@@ -9,7 +8,6 @@ import {
   createTransaction
 } from '@/lib/db';
 import { authOptions } from '@/lib/authOptions';
-import { getCurrentUser } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import { sendMoneySchema } from '@/lib/validation';
 
@@ -30,6 +28,16 @@ const normalizePhone = (phone: string): string => {
 
 export async function POST(req: Request) {
   try {
+    // Check authentication via session only
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Not authenticated - please login again" },
+        { status: 401 }
+      );
+    }
+
     // Validate input data
     const requestData = await req.json();
     const validation = sendMoneySchema.safeParse(requestData);
@@ -44,15 +52,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Authenticate sender - use getServerSession for server-side auth
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Not authenticated - please login again" },
-        { status: 401 }
-      );
-    }
-
     const { 
       recipientType, 
       recipientPhone, 
@@ -61,28 +60,11 @@ export async function POST(req: Request) {
       description 
     } = validation.data;
 
-    const recipientIdentifier = recipientType === "phone" 
-      ? recipientPhone 
-      : recipientEmail;
-
-    if (!recipientIdentifier) {
-      return NextResponse.json(
-        { error: "Recipient identifier is required" },
-        { status: 400 }
-      );
-    }
-
-    // Authenticate sender
-    const currentUser = await getCurrentUser();
-    if (!currentUser?.id) {
-      return NextResponse.json(
-        { error: "Not authenticated - please login again" },
-        { status: 401 }
-      );
-    }
+    // Use the authenticated user ID from session
+    const senderId = session.user.id;
 
     // Get sender details
-    const sender = await findUserById(currentUser.id);
+    const sender = await findUserById(senderId);
     if (!sender) {
       return NextResponse.json(
         { error: "Sender account not found" },
@@ -92,7 +74,7 @@ export async function POST(req: Request) {
 
     // Validate amount
     const amountNum = Number(amount);
-    if (isNaN(amountNum)) {
+    if (isNaN(amountNum) || amountNum <= 0) {
       return NextResponse.json(
         { error: "Invalid amount provided" },
         { status: 400 }
@@ -113,6 +95,8 @@ export async function POST(req: Request) {
 
     // Find recipient based on type
     let recipient;
+    const recipientIdentifier = recipientType === "phone" ? recipientPhone : recipientEmail;
+    
     if (recipientType === "phone") {
       const normalizedPhone = normalizePhone(recipientIdentifier);
       // Try both normalized and original formats
