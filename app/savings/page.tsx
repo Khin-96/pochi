@@ -44,7 +44,8 @@ const contributeSchema = z.object({
 })
 
 interface SavingsGoal {
-  _id: string
+  id?: string
+  _id?: string 
   name: string
   targetAmount: number
   currentAmount: number
@@ -275,10 +276,17 @@ export default function SavingsPage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             
 {goals.map((goal) => {
+  // Ensure we have a proper ID for the key
+  const goalId = goal.id || goal._id;
+  if (!goalId) {
+    console.warn('Goal missing ID:', goal);
+    return null; // Skip rendering if no ID
+  }
+
   const progress = Math.min(Math.round((goal.currentAmount / goal.targetAmount) * 100), 100);
 
   return (
-    <Card key={goal._id}>
+    <Card key={goal.id}>
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>

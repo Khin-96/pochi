@@ -594,7 +594,12 @@ export async function fetchSavingsGoals() {
   };
 }
 
-export async function createSavingsGoal(goalData: any) {
+export async function createSavingsGoal(goalData: {
+  name: string;
+  targetAmount: number;
+  deadline?: string;
+  category: string;
+}) {
   const response = await fetch("/api/savings", {
     method: "POST",
     headers: {
@@ -609,7 +614,7 @@ export async function createSavingsGoal(goalData: any) {
     throw new Error(error.message || "Failed to create savings goal");
   }
 
-  return response.json().then((data) => data.goal);
+  return response.json().then((data) => data);
 }
 
 export async function contributeToSavingsGoal(goalId: string, amount: number) {

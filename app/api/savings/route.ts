@@ -36,28 +36,24 @@ export async function POST(req: Request) {
 
     if (!name || !targetAmount || !category) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Missing required fields: name, targetAmount, and category are required" },
         { status: 400 }
       );
     }
 
+    // Use the createSavingsGoal function from your db module
     const newGoal = await createSavingsGoal({
-      userId: user._id,
       name,
-      targetAmount,
-      deadline: deadline || null,
+      targetAmount: Number(targetAmount),
+      deadline: deadline ? new Date(deadline) : undefined,
       category,
-      currentAmount: 0, // Initialize with 0
-    });
+    }, user._id.toString()); // Pass the user ID
 
-    return NextResponse.json({
-      ...newGoal,
-      _id: newGoal._id.toString(), // Ensure ID is string
-    }, { status: 201 });
+    return NextResponse.json(newGoal, { status: 201 });
   } catch (error) {
     console.error("Error creating savings goal:", error);
     return NextResponse.json(
-      { error: "Failed to create savings goal" },
+      { error: error instanceof Error ? error.message : "Failed to create savings goal" },
       { status: 500 }
     );
   }
