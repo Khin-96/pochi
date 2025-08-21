@@ -56,9 +56,11 @@ export async function createUser(userData: Omit<User, "_id" | "createdAt" | "bal
 }
 
 export async function findUserByEmail(email: string): Promise<User | null> {
-  const client = await clientPromise
-  const db = client.db(DB_NAME)
-  return db.collection(COLLECTIONS.USERS).findOne({ email })
+  const client = await clientPromise;
+  const db = client.db(DB_NAME);
+  return db.collection(COLLECTIONS.USERS).findOne({ 
+    email: email.toLowerCase().trim() 
+  });
 }
 
 export async function findUserById(id: string): Promise<User | null> {
@@ -260,10 +262,33 @@ export async function findLoansByUserId(userId: string): Promise<Loan[]> {
     .sort({ requestDate: -1 })
     .toArray()
 }
+
 export async function findUserByPhone(phone: string): Promise<User | null> {
   const client = await clientPromise;
   const db = client.db(DB_NAME);
-  return db.collection(COLLECTIONS.USERS).findOne({ phone });
+  
+  // First try exact match
+  const exactMatch = await db.collection(COLLECTIONS.USERS).findOne({ phone });
+  if (exactMatch) return exactMatch;
+  
+  // If no exact match, try normalizing the phone number
+  const normalizedPhone = normalizePhone(phone);
+  return db.collection(COLLECTIONS.USERS).findOne({ phone: normalizedPhone });
+}
+
+// Helper function for phone number normalization
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('254')) {
+    return digits;
+  }
+  if (digits.startsWith('0') && digits.length === 10) {
+    return '254' + digits.substring(1);
+  }
+  if (digits.startsWith('+254')) {
+    return digits.substring(1);
+  }
+  return digits;
 }
 
 // Savings Goal functions
@@ -374,4 +399,13 @@ export async function getPesaBotChat(userId: string): Promise<any> {
   const db = client.db(DB_NAME)
 
   return db.collection(COLLECTIONS.PESABOT_CHATS).findOne({ userId })
+}
+export async function getCurrentUser(): Promise<User | null> {
+  // Implementation from your auth file
+  const response = await fetch("/api/auth/user");
+  if (!response.ok) {
+    return null;
+  }
+  const data = await response.json();
+  return data.user;
 }

@@ -5,7 +5,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { sendMoney, fetchTransactions, getCurrentUser, verifyRecipient } from "@/lib/api";
+import { sendMoney, fetchTransactions, verifyRecipient } from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -81,6 +82,7 @@ export default function PaymentsPage() {
       description: "",
       recipientName: "",
     },
+    mode: "onChange",
   });
 
   const recipientType = form.watch("recipientType");
@@ -115,69 +117,74 @@ export default function PaymentsPage() {
     fetchData();
   }, []);
 
-  const handleVerifyRecipient = async (values: z.infer<typeof sendMoneySchema>) => {
-    if (!user) return;
+const handleVerifyRecipient = async (values: z.infer<typeof sendMoneySchema>) => {
+  if (!user) return;
+  
+  setIsVerifying(true);
+  setVerificationError(null);
+  
+  try {
+    const identifier = values.recipientType === "phone" 
+      ? values.recipientPhone 
+      : values.recipientEmail;
     
-    // Check balance first
-    if (user.balance < Number(values.amount)) {
+    if (!identifier) {
       toast({
-        title: "Insufficient Balance",
-        description: "You don't have enough funds for this transaction.",
+        title: "Error",
+        description: "Please provide recipient details",
         variant: "destructive",
       });
       return;
     }
 
-    setIsVerifying(true);
-    setVerificationError(null);
-    
-    try {
-      const identifier = values.recipientType === "phone" 
-        ? values.recipientPhone 
-        : values.recipientEmail;
-      
-      if (!identifier) {
-        toast({
-          title: "Error",
-          description: "Please provide recipient details",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const verification = await verifyRecipient(
-        identifier,
-        values.recipientType
-      );
-
-      if (!verification.verified) {
-        throw new Error(verification.message || "Recipient verification failed");
-      }
-
-      // Store recipient name for confirmation
-      form.setValue('recipientName', verification.name);
-      
-      // Show confirmation dialog
-      setShowConfirmation(true);
-      
-    } catch (error) {
-      console.error("Verification failed:", error);
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : "Recipient not found. Please check the details and try again.";
-      
-      setVerificationError(errorMessage);
-      toast({
-        title: "Verification Failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setIsVerifying(false);
+    // Check balance first
+    if (user.balance < Number(values.amount)) {
+      throw new Error("Insufficient balance for this transaction");
     }
-  };
+
+    const verification = await verifyRecipient(
+      identifier,
+      values.recipientType
+    );
+
+    if (!verification.verified) {
+      throw new Error(verification.message || "Recipient verification failed");
+    }
+
+    // Store recipient name for confirmation
+    form.setValue('recipientName', verification.name);
+    
+    // Show confirmation dialog
+    setShowConfirmation(true);
+    
+  } catch (error) {
+    console.error("Verification failed:", error);
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : "Recipient not found. Please check the details and try again.";
+    
+    setVerificationError(errorMessage);
+    toast({
+      title: "Verification Failed",
+      description: errorMessage,
+      variant: "destructive",
+    });
+  } finally {
+    setIsVerifying(false);
+  }
+};
 
 const handleConfirmSend = async () => {
+   // Check session first
+  const user = await getCurrentUser();
+  if (!user) {
+    toast({
+      title: "Session expired",
+      description: "Please login again to continue",
+      variant: "destructive",
+    });
+    return;
+  }
   if (!user) {
     toast({
       title: "Session expired",
@@ -188,34 +195,34 @@ const handleConfirmSend = async () => {
   }
 
   const values = form.getValues();
-  const identifier = values.recipientType === "phone" 
-    ? values.recipientPhone 
-    : values.recipientEmail;
   
-  if (!identifier) {
-    toast({
-      title: "Recipient missing",
-      description: "Please provide recipient details",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  setIsSending(true);
-  setVerificationError(null);
-
   try {
-    const response = await sendMoney(
-      identifier,
-      Number(values.amount),
-      values.description || "",
-      values.recipientType
-    );
+    // Validate amount is a positive number
+    const amount = Number(values.amount);
+    if (isNaN(amount)) {
+      throw new Error("Please enter a valid amount");
+    }
+
+    // Check balance again right before sending
+    if (user.balance < amount) {
+      throw new Error("Insufficient balance for this transaction");
+    }
+
+    // Structure the request data properly
+    const requestData = {
+      recipientType: values.recipientType,
+      recipientPhone: values.recipientType === "phone" ? values.recipientPhone : undefined,
+      recipientEmail: values.recipientType === "email" ? values.recipientEmail : undefined,
+      amount: amount.toString(),
+      description: values.description || "",
+    };
+
+    const response = await sendMoney(requestData);
 
     // Show success message
     toast({
       title: "Transfer Successful",
-      description: `${formatCurrency(Number(values.amount))} sent to ${values.recipientName || identifier}`,
+      description: `${formatCurrency(amount)} sent to ${values.recipientName || (values.recipientType === 'phone' ? values.recipientPhone : values.recipientEmail)}`,
     });
 
     // Refresh user data and transactions
@@ -245,49 +252,53 @@ const handleConfirmSend = async () => {
       recipientName: "",
     });
 
-  } catch (error: any) {
-    console.error("Send money error:", error);
-    
-    let errorMessage = "Failed to complete transaction";
-    let showRetry = false;
+    } catch (error: any) {
+      console.error("Send money error:", error);
+      
+      let errorMessage = "Failed to complete transaction";
+      let showRetry = false;
 
-    // Handle specific error cases
-    if (error.message.includes("authenticated")) {
-      errorMessage = "Session expired - please login again";
-    } else if (error.message.includes("balance")) {
-      errorMessage = "Insufficient funds for this transaction";
-    } else if (error.message.includes("network")) {
-      errorMessage = "Network error - please check your connection";
-      showRetry = true;
-    } else if (error.message.includes("not found")) {
-      errorMessage = "Recipient account not found";
-    } else {
-      errorMessage = error.message || errorMessage;
+      // Handle specific error cases with more user-friendly messages
+      if (error.message.includes("Validation failed:")) {
+        // Extract and format validation errors
+        errorMessage = error.message.replace("Validation failed: ", "");
+      } else if (error.message.includes("Not authenticated")) {
+        errorMessage = "Your session has expired. Please login again.";
+      } else if (error.message.includes("balance")) {
+        errorMessage = "Insufficient funds for this transaction";
+      } else if (error.message.includes("network")) {
+        errorMessage = "Network error - please check your connection";
+        showRetry = true;
+      } else if (error.message.includes("not found")) {
+        errorMessage = "Recipient account not found. Please verify the details.";
+      } else if (error.message.includes("Cannot send money to yourself")) {
+        errorMessage = "You cannot send money to yourself";
+      } else {
+        errorMessage = error.message || errorMessage;
+      }
+
+      toast({
+        title: "Transfer Failed",
+        description: errorMessage,
+        variant: "destructive",
+        action: showRetry ? (
+          <Button 
+            variant="ghost" 
+            onClick={handleConfirmSend}
+            className="text-blue-600 hover:text-blue-800"
+          >
+            Retry
+          </Button>
+        ) : undefined,
+      });
+
+      // Store error for form display
+      setVerificationError(errorMessage);
+    } finally {
+      setIsSending(false);
+      setShowConfirmation(false);
     }
-
-    toast({
-      title: "Transfer Failed",
-      description: errorMessage,
-      variant: "destructive",
-      action: showRetry ? (
-        <Button 
-          variant="ghost" 
-          onClick={handleConfirmSend}
-          className="text-blue-600 hover:text-blue-800"
-        >
-          Retry
-        </Button>
-      ) : undefined,
-    });
-
-    // Store error for form display
-    setVerificationError(errorMessage);
-
-  } finally {
-    setIsSending(false);
-    setShowConfirmation(false);
-  }
-};
+  };
 
   const handleCancelSend = () => {
     setShowConfirmation(false);
@@ -523,16 +534,18 @@ const handleConfirmSend = async () => {
 
       {/* Confirmation Dialog */}
       <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
-        <DialogContent>
+        <DialogContent className="max-w-md bg-white dark:bg-gray-800">
           <DialogHeader>
-            <DialogTitle>Confirm Transaction</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">
+              Confirm Transaction
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-300">
               Please confirm the transaction details below:
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
               <h3 className="font-medium mb-2">Transaction Summary</h3>
               <div className="space-y-2">
                 <div className="flex justify-between items-center">

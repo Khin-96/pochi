@@ -2,21 +2,31 @@
 import { NextResponse } from 'next/server';
 import { findUserByEmail, findUserByPhone } from '@/lib/db';
 
+// Helper function to normalize phone numbers
 const normalizePhone = (phone: string): string => {
+  // Remove all non-digit characters
   const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('254') && digits.length === 12) return `+${digits}`;
-  if (digits.startsWith('0') && digits.length === 10) return `+254${digits.substring(1)}`;
-  if (digits.length === 9) return `+254${digits}`;
-  return phone;
+  
+  // Handle Kenyan numbers specifically
+  if (digits.startsWith('254')) {
+    return digits;
+  }
+  if (digits.startsWith('0') && digits.length === 10) {
+    return '254' + digits.substring(1);
+  }
+  if (digits.startsWith('+254')) {
+    return digits.substring(1);
+  }
+  return digits;
 };
 
 export async function POST(req: Request) {
   try {
     const { identifier, type } = await req.json();
-    
+
     if (!identifier || !type) {
       return NextResponse.json(
-        { error: 'Identifier and type are required' },
+        { error: "Missing identifier or type" },
         { status: 400 }
       );
     }
@@ -24,16 +34,19 @@ export async function POST(req: Request) {
     let user;
     if (type === 'phone') {
       const normalizedPhone = normalizePhone(identifier);
-      user = await findUserByPhone(normalizedPhone);
+      // Try both normalized and original formats
+      user = await findUserByPhone(normalizedPhone) || 
+             await findUserByPhone(identifier);
     } else {
-      user = await findUserByEmail(identifier.toLowerCase());
+      // For email, just use the exact match (case insensitive)
+      user = await findUserByEmail(identifier.toLowerCase().trim());
     }
 
     if (!user) {
       return NextResponse.json(
         { 
           verified: false,
-          error: 'Recipient not found' 
+          message: 'Recipient not found'
         },
         { status: 404 }
       );
@@ -49,7 +62,10 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error('Verification error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }

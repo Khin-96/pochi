@@ -6,11 +6,7 @@ import jwt from "jsonwebtoken";
 import { redirect } from "next/navigation";
 
 // Configuration
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET environment variable is not set");
-}
-
+const JWT_SECRET = process.env.JWT_SECRET || "your-fallback-secret-for-development";
 const TOKEN_NAME = "pochiyangu_token";
 const TOKEN_EXPIRY = 60 * 60 * 24 * 7; // 7 days in seconds
 const REMEMBER_ME_EXPIRY = TOKEN_EXPIRY * 2; // 14 days
@@ -126,7 +122,9 @@ export async function logout(): Promise<void> {
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
     const token = await getAuthCookie();
-    if (!token) return null;
+    if (!token) {
+      return null;
+    }
 
     const decoded = await verifyToken(token);
     const user = await findUserById(decoded.userId);

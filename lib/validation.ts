@@ -11,10 +11,14 @@ export const sendMoneySchema = z.object({
   recipientEmail: z.string()
     .email("Invalid email address")
     .optional(),
-  amount: z.string()
-    .min(1, "Amount is required")
-    .refine(val => !isNaN(parseFloat(val)), "Must be a number")
-    .refine(val => parseFloat(val) > 0, "Amount must be positive"),
+  amount: z.union([
+    z.string()
+      .min(1, "Amount is required")
+      .refine(val => !isNaN(parseFloat(val)), "Must be a number")
+      .refine(val => parseFloat(val) > 0, "Amount must be positive"),
+    z.number()
+      .positive("Amount must be positive")
+  ]),
   description: z.string().max(100, "Description too long").optional(),
 }).superRefine((data, ctx) => {
   if (data.recipientType === "phone" && !data.recipientPhone) {

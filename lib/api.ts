@@ -50,14 +50,21 @@ export async function logout() {
 }
 
 export async function getCurrentUser() {
-  const response = await fetch("/api/auth/user");
+  try {
+    const response = await fetch("/api/auth/user", {
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
 
-  if (!response.ok) {
+    const user = await response.json();
+    return user || null;
+  } catch (error) {
+    console.error("Failed to fetch current user:", error);
     return null;
   }
-
-  const data = await response.json();
-  return data.user;
 }
 
 export async function forgotPassword(email: string) {
@@ -79,7 +86,9 @@ export async function forgotPassword(email: string) {
 
 // User Profile functions
 export async function fetchUserProfile() {
-  const response = await fetch("/api/user/profile");
+  const response = await fetch("/api/user/profile", {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     throw new Error("Failed to fetch user profile");
@@ -95,6 +104,7 @@ export async function updateUserProfile(profileData: any) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify(profileData),
   });
 
@@ -112,6 +122,7 @@ export async function updateNotificationPreferences(preferences: any) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify(preferences),
   });
 
@@ -129,6 +140,7 @@ export async function updateSecuritySettings(settings: any) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify(settings),
   });
 
@@ -140,23 +152,22 @@ export async function updateSecuritySettings(settings: any) {
   return response.json();
 }
 
-// Dashboard data
+// Dashboard data - REMOVED AUTH CHECK
 export async function fetchDashboardData() {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Not authenticated");
+  // Fetch chamas and transactions in parallel - let API routes handle auth
+  const [chamasResponse, transactionsResponse] = await Promise.all([
+    fetch("/api/chamas", { credentials: 'include' }),
+    fetch("/api/transactions", { credentials: 'include' })
+  ]);
 
-  // Fetch chamas
-  const chamasResponse = await fetch("/api/chamas");
   if (!chamasResponse.ok) {
     throw new Error("Failed to fetch chamas");
   }
-  const chamasData = await chamasResponse.json();
-
-  // Fetch transactions
-  const transactionsResponse = await fetch("/api/transactions");
   if (!transactionsResponse.ok) {
     throw new Error("Failed to fetch transactions");
   }
+
+  const chamasData = await chamasResponse.json();
   const transactionsData = await transactionsResponse.json();
 
   // For now, we'll use mock data for insights
@@ -172,11 +183,6 @@ export async function fetchDashboardData() {
   ];
 
   return {
-    user,
-    wallet: {
-      balance: user.balance,
-      currency: "KES",
-    },
     chamas: chamasData.chamas,
     transactions: transactionsData.transactions,
     insights,
@@ -185,7 +191,9 @@ export async function fetchDashboardData() {
 
 // Chama functions
 export async function fetchChamas() {
-  const response = await fetch("/api/chamas");
+  const response = await fetch("/api/chamas", {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     throw new Error("Failed to fetch chamas");
@@ -199,7 +207,9 @@ export async function fetchChamas() {
 }
 
 export async function fetchPublicChamas() {
-  const response = await fetch("/api/chamas/public");
+  const response = await fetch("/api/chamas/public", {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     throw new Error("Failed to fetch public chamas");
@@ -218,6 +228,7 @@ export async function createChama(chamaData: any) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify(chamaData),
   });
 
@@ -234,7 +245,9 @@ export async function createChama(chamaData: any) {
 }
 
 export async function fetchChamaDetails(chamaId: string): Promise<ChamaDetails> {
-  const response = await fetch(`/api/chamas/${chamaId}`);
+  const response = await fetch(`/api/chamas/${chamaId}`, {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     throw new Error("Failed to fetch chama details");
@@ -271,6 +284,7 @@ export async function joinChama(chamaId: string) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -287,6 +301,7 @@ export async function leaveChama(chamaId: string) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -313,6 +328,7 @@ export async function contributeToChama(chamaId: string, amount: number) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify({ amount }),
   });
 
@@ -334,6 +350,7 @@ export async function requestWelfare(chamaId: string, requestData: {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify(requestData),
   });
 
@@ -347,7 +364,9 @@ export async function requestWelfare(chamaId: string, requestData: {
 
 // Chat functions
 export async function fetchChatHistory(chamaId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/chat`);
+  const response = await fetch(`/api/chamas/${chamaId}/chat`, {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     throw new Error("Failed to fetch chat history");
@@ -358,7 +377,9 @@ export async function fetchChatHistory(chamaId: string) {
 }
 
 export async function fetchChamaBasicInfo(chamaId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/basic`);
+  const response = await fetch(`/api/chamas/${chamaId}/basic`, {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     throw new Error("Failed to fetch chama basic info");
@@ -374,6 +395,7 @@ export async function sendChatMessage(chamaId: string, content: string) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify({ content }),
   });
 
@@ -387,7 +409,9 @@ export async function sendChatMessage(chamaId: string, content: string) {
 
 // Voting functions
 export async function fetchVotingProposals(chamaId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/proposals`);
+  const response = await fetch(`/api/chamas/${chamaId}/proposals`, {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     throw new Error("Failed to fetch voting proposals");
@@ -403,6 +427,7 @@ export async function createProposal(chamaId: string, proposalData: any) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify(proposalData),
   });
 
@@ -420,6 +445,7 @@ export async function submitVote(chamaId: string, proposalId: string, option: st
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify({ option }),
   });
 
@@ -433,7 +459,9 @@ export async function submitVote(chamaId: string, proposalId: string, option: st
 
 // Admin functions
 export async function fetchChamaAdminData(chamaId: string) {
-  const response = await fetch(`/api/chamas/${chamaId}/admin`);
+  const response = await fetch(`/api/chamas/${chamaId}/admin`, {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     throw new Error("Failed to fetch admin data");
@@ -449,6 +477,7 @@ export async function addCoAdmin(chamaId: string, email: string) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify({ email }),
   });
 
@@ -463,6 +492,7 @@ export async function addCoAdmin(chamaId: string, email: string) {
 export async function removeCoAdmin(chamaId: string, adminId: string) {
   const response = await fetch(`/api/chamas/${chamaId}/admin/co-admin/${adminId}`, {
     method: "DELETE",
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -476,6 +506,7 @@ export async function removeCoAdmin(chamaId: string, adminId: string) {
 export async function approveJoinRequest(chamaId: string, requestId: string) {
   const response = await fetch(`/api/chamas/${chamaId}/join-requests/${requestId}/approve`, {
     method: "POST",
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -489,6 +520,7 @@ export async function approveJoinRequest(chamaId: string, requestId: string) {
 export async function rejectJoinRequest(chamaId: string, requestId: string) {
   const response = await fetch(`/api/chamas/${chamaId}/join-requests/${requestId}/reject`, {
     method: "POST",
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -505,6 +537,7 @@ export async function toggleChamaVisibility(chamaId: string, newType: "private" 
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify({ type: newType }),
   });
 
@@ -519,6 +552,7 @@ export async function toggleChamaVisibility(chamaId: string, newType: "private" 
 export async function generateInviteLink(chamaId: string) {
   const response = await fetch(`/api/chamas/${chamaId}/invite-link`, {
     method: "POST",
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -532,6 +566,7 @@ export async function generateInviteLink(chamaId: string) {
 export async function downloadReceipt(chamaId: string) {
   const response = await fetch(`/api/chamas/${chamaId}/receipt`, {
     method: "GET",
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -544,7 +579,9 @@ export async function downloadReceipt(chamaId: string) {
 
 // Savings functions
 export async function fetchSavingsGoals() {
-  const response = await fetch("/api/savings");
+  const response = await fetch("/api/savings", {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     throw new Error("Failed to fetch savings goals");
@@ -553,7 +590,7 @@ export async function fetchSavingsGoals() {
   const data = await response.json();
   return {
     goals: data.goals,
-    userBalance: data.userBalance // Make sure your API returns this
+    userBalance: data.userBalance
   };
 }
 
@@ -563,6 +600,7 @@ export async function createSavingsGoal(goalData: any) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify(goalData),
   });
 
@@ -590,6 +628,7 @@ export async function contributeToSavingsGoal(goalId: string, amount: number) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify({ amount }),
   });
 
@@ -612,27 +651,14 @@ export async function verifyRecipient(
   identifier: string;
 }> {
   try {
-    // Try the new endpoint first
-    let response;
-    try {
-      response = await fetch('/api/payments/verify-recipient', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ identifier, type }),
-      });
-    } catch (networkError) {
-      console.warn('Primary verification endpoint failed, trying fallback');
-      // Fallback to a different endpoint if the primary one fails
-      response = await fetch('/api/verify-recipient', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ identifier, type }),
-      });
-    }
+    const response = await fetch('/api/payments/verify-recipient', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ identifier, type }),
+    });
 
     // Check if the response is JSON
     const contentType = response.headers.get('content-type');
@@ -677,9 +703,12 @@ export async function verifyRecipient(
     );
   }
 }
+
 // Loans functions
 export async function fetchLoans() {
-  const response = await fetch("/api/loans");
+  const response = await fetch("/api/loans", {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     throw new Error("Failed to fetch loans");
@@ -695,6 +724,7 @@ export async function requestLoan(loanData: any) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify(loanData),
   });
 
@@ -722,6 +752,7 @@ export async function repayLoan(loanId: string, amount: number) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify({ amount }),
   });
 
@@ -735,7 +766,9 @@ export async function repayLoan(loanId: string, amount: number) {
 
 // Investments functions
 export async function fetchInvestments() {
-  const response = await fetch("/api/investments");
+  const response = await fetch("/api/investments", {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     throw new Error("Failed to fetch investments");
@@ -761,6 +794,7 @@ export async function createInvestment(investmentData: any) {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: 'include',
     body: JSON.stringify(investmentData),
   });
 
@@ -773,47 +807,29 @@ export async function createInvestment(investmentData: any) {
 }
 
 // Payments functions
-export async function sendMoney(
-  recipientIdentifier: string, 
-  amount: number, 
-  description: string,
-  recipientType: 'phone' | 'email'
-) {
+export async function sendMoney(requestData: any) {
   try {
-    // First check if we have a valid session
-    const sessionCheck = await fetch('/api/auth/session');
-    if (!sessionCheck.ok) {
-      throw new Error("Not authenticated");
-    }
-
     const response = await fetch("/api/payments/send", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // Ensure credentials are included
-        credentials: 'include',
       },
-      body: JSON.stringify({ 
-        recipientIdentifier, 
-        amount, 
-        description,
-        recipientType
-      }),
+      credentials: 'include',
+      body: JSON.stringify(requestData),
     });
 
     if (!response.ok) {
-      let errorMessage = "Failed to send money";
-      try {
-        const error = await response.json();
-        errorMessage = error.message || error.error || errorMessage;
-      } catch (e) {
-        const text = await response.text();
-        if (text) errorMessage = text;
+      const errorData = await response.json();
+      if (errorData.issues) {
+        const validationErrors = errorData.issues
+          .map((issue: any) => `${issue.path.join('.')}: ${issue.message}`)
+          .join(', ');
+        throw new Error(`Validation failed: ${validationErrors}`);
       }
-      throw new Error(errorMessage);
+      throw new Error(errorData.error || errorData.message || 'Failed to send money');
     }
 
-    return response.json();
+    return await response.json();
   } catch (error) {
     console.error("Payment processing error:", error);
     throw new Error(
@@ -825,7 +841,9 @@ export async function sendMoney(
 }
 
 export async function fetchTransactions() {
-  const response = await fetch("/api/transactions");
+  const response = await fetch("/api/transactions", {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     throw new Error("Failed to fetch transactions");
@@ -835,8 +853,8 @@ export async function fetchTransactions() {
   return data.transactions;
 }
 
-// Update the ChamaDetails interface to match your data structure
-interface ChamaDetails {
+// Interface definitions
+export interface ChamaDetails {
   id: string;
   _id: string;
   name: string;
@@ -876,7 +894,7 @@ interface ChamaDetails {
   pendingRequests?: number;
 }
 
-interface WelfareRequest {
+export interface WelfareRequest {
   id: string;
   chamaId: string;
   memberId: string;
@@ -887,4 +905,15 @@ interface WelfareRequest {
   createdAt: string;
   updatedAt: string;
   urgency: 'low' | 'medium' | 'high';
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  balance: number;
+  avatar?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }

@@ -1,86 +1,80 @@
 // app/api/payments/send/route.ts
 import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
 import { 
+   
   findUserById, 
-  updateUserBalance, 
-  createTransaction, 
   findUserByEmail, 
-  findUserByPhone 
+  findUserByPhone,
+  updateUserBalance,
+  createTransaction
 } from '@/lib/db';
+import { authOptions } from '@/lib/authOptions';
+import { getCurrentUser } from '@/lib/auth';
+import { getServerSession } from 'next-auth';
+import { sendMoneySchema } from '@/lib/validation';
 
-// Helper function to normalize phone numbers for lookup
-const normalizePhoneForLookup = (phone: string): string[] => {
+// Reuse the same phone normalization function
+const normalizePhone = (phone: string): string => {
   const digits = phone.replace(/\D/g, '');
-  
-  // Handle Kenyan phone numbers specifically
   if (digits.startsWith('254')) {
-    return [
-      digits,                          // 254712345678
-      `0${digits.substring(3)}`,       // 0712345678
-      `+${digits}`,                    // +254712345678
-      `0${digits.substring(3, 6)} ${digits.substring(6)}` // 0712 345678
-    ].filter((v, i, a) => a.indexOf(v) === i);
+    return digits;
   }
-
-  // For other international numbers
-  return [
-    `+${digits}`,
-    digits,
-    digits.replace(/^\+/, '')
-  ].filter((v, i, a) => a.indexOf(v) === i);
-};
-
-// Helper to validate email format
-const isValidEmail = (email: string): boolean => {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if (digits.startsWith('0') && digits.length === 10) {
+    return '254' + digits.substring(1);
+  }
+  if (digits.startsWith('+254')) {
+    return digits.substring(1);
+  }
+  return digits;
 };
 
 export async function POST(req: Request) {
   try {
-    const { 
-      recipientIdentifier, 
-      amount, 
-      description,
-      recipientType 
-    } = await req.json();
+    // Validate input data
+    const requestData = await req.json();
+    const validation = sendMoneySchema.safeParse(requestData);
     
-    // Validate input
-    if (!recipientIdentifier || !amount || !recipientType) {
+    if (!validation.success) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { 
+          error: "Validation failed",
+          issues: validation.error.issues 
+        },
         { status: 400 }
       );
     }
 
-    // Validate amount
-    const amountNum = Number(amount);
-    if (isNaN(amountNum) || amountNum <= 0) {
+    // Authenticate sender - use getServerSession for server-side auth
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: "Invalid amount provided" },
+        { error: "Not authenticated - please login again" },
+        { status: 401 }
+      );
+    }
+
+    const { 
+      recipientType, 
+      recipientPhone, 
+      recipientEmail, 
+      amount, 
+      description 
+    } = validation.data;
+
+    const recipientIdentifier = recipientType === "phone" 
+      ? recipientPhone 
+      : recipientEmail;
+
+    if (!recipientIdentifier) {
+      return NextResponse.json(
+        { error: "Recipient identifier is required" },
         { status: 400 }
       );
     }
 
-    // Validate recipient type
-    if (!['phone', 'email'].includes(recipientType)) {
-      return NextResponse.json(
-        { error: "Invalid recipient type" },
-        { status: 400 }
-      );
-    }
-
-    // Validate email format if email transfer
-    if (recipientType === 'email' && !isValidEmail(recipientIdentifier)) {
-      return NextResponse.json(
-        { error: "Invalid email format" },
-        { status: 400 }
-      );
-    }
-
-    // Authenticate user
-    const user = await getCurrentUser();
-    if (!user?.id) {
+    // Authenticate sender
+    const currentUser = await getCurrentUser();
+    if (!currentUser?.id) {
       return NextResponse.json(
         { error: "Not authenticated - please login again" },
         { status: 401 }
@@ -88,7 +82,7 @@ export async function POST(req: Request) {
     }
 
     // Get sender details
-    const sender = await findUserById(user.id);
+    const sender = await findUserById(currentUser.id);
     if (!sender) {
       return NextResponse.json(
         { error: "Sender account not found" },
@@ -96,13 +90,14 @@ export async function POST(req: Request) {
       );
     }
 
-    // Check if sender is verified (add this if you have verification)
-    // if (!sender.isVerified) {
-    //   return NextResponse.json(
-    //     { error: "Please verify your account before sending money" },
-    //     { status: 403 }
-    //   );
-    // }
+    // Validate amount
+    const amountNum = Number(amount);
+    if (isNaN(amountNum)) {
+      return NextResponse.json(
+        { error: "Invalid amount provided" },
+        { status: 400 }
+      );
+    }
 
     // Check balance
     if (sender.balance < amountNum) {
@@ -119,13 +114,11 @@ export async function POST(req: Request) {
     // Find recipient based on type
     let recipient;
     if (recipientType === "phone") {
-      const possiblePhones = normalizePhoneForLookup(recipientIdentifier);
-      for (const phone of possiblePhones) {
-        recipient = await findUserByPhone(phone);
-        if (recipient) break;
-      }
+      const normalizedPhone = normalizePhone(recipientIdentifier);
+      // Try both normalized and original formats
+      recipient = await findUserByPhone(normalizedPhone) || 
+                  await findUserByPhone(recipientIdentifier);
     } else {
-      // Email transfer
       recipient = await findUserByEmail(recipientIdentifier.toLowerCase().trim());
     }
 
@@ -144,17 +137,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // Check if recipient can receive money (add any specific checks here)
-    // if (recipient.isSuspended) {
-    //   return NextResponse.json(
-    //     { error: "Recipient account is suspended" },
-    //     { status: 403 }
-    //   );
-    // }
+    // Perform transaction
+    const [senderUpdate, recipientUpdate] = await Promise.all([
+      updateUserBalance(sender._id.toString(), -amountNum),
+      updateUserBalance(recipient._id.toString(), amountNum)
+    ]);
 
-    // Perform transaction (wrap in transaction if your DB supports it)
-    await updateUserBalance(sender._id.toString(), -amountNum);
-    await updateUserBalance(recipient._id.toString(), amountNum);
+    if (!senderUpdate || !recipientUpdate) {
+      throw new Error("Failed to update balances");
+    }
 
     // Record transaction for sender
     const senderTransaction = await createTransaction({
@@ -168,7 +159,7 @@ export async function POST(req: Request) {
       date: new Date(),
     });
 
-    // Record transaction for recipient (optional)
+    // Record transaction for recipient
     await createTransaction({
       userId: recipient._id.toString(),
       type: "credit",
@@ -183,31 +174,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ 
       success: true,
       message: `Successfully sent ${amountNum} KES to ${recipient.name}`,
-      transaction: {
-        id: senderTransaction._id.toString(),
-        amount: senderTransaction.amount,
-        date: senderTransaction.date,
+      data: {
+        transactionId: senderTransaction._id.toString(),
+        amount: amountNum,
         recipient: {
           name: recipient.name,
           [recipientType]: recipientIdentifier
         },
-        receiptUrl: `/api/transactions/${senderTransaction._id}/receipt`
-      },
-      newBalance: sender.balance - amountNum
+        newBalance: sender.balance - amountNum,
+        timestamp: new Date().toISOString()
+      }
     });
 
   } catch (error) {
     console.error("Payment processing error:", error);
+    
+    let errorMessage = "Transaction failed";
+    let statusCode = 500;
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      if (error.message.includes("validation")) {
+        statusCode = 400;
+      }
+    }
+
     return NextResponse.json(
       { 
-        error: "Transaction failed",
-        message: process.env.NODE_ENV === 'development' 
-          ? error instanceof Error 
-            ? error.message 
-            : String(error)
-          : "Please try again later"
+        error: errorMessage,
+        ...(process.env.NODE_ENV === 'development' && {
+          stack: error instanceof Error ? error.stack : undefined
+        })
       },
-      { status: 500 }
+      { status: statusCode }
     );
   }
 }

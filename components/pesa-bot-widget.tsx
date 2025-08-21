@@ -38,17 +38,26 @@ export default function PesaBotWidget() {
       const welcomeMessage = {
         id: "welcome",
         content: language === "en" 
-          ? `Hello${user ? ` ${user.name}` : ''}! I'm PesaBot, your financial assistant. You can ask me about:\n` +
-            "• Account balances\n• Recent transactions\n• Savings goals\n" +
-            "• Chama contributions\n• Loans\n• Frequent recipients\n" +
-            "• Basic financial advice\n\n" +
-            "Try: \"What's my balance?\" or \"Show my recent transactions\"\n" +
-            "Say 'Swahili' to switch to Swahili"
-          : `Habari${user ? ` ${user.name}` : ''}! Mimi ni PesaBot, msaidizi wako wa kifedha. Unaweza kuniuliza kuhusu:\n` +
-            "• Salio lako\n• Manunuzi ya hivi karibuni\n• Malengo ya akiba\n" +
-            "• Michango ya chama\n• Mikopo\n• Watu unaotuma pesa mara kwa mara\n\n" +
-            "Jaribu: \"Nina salio gani?\" au \"Nionyeshe manunuzi yangu ya hivi karibuni\"\n" +
-            "Sema 'English' kubadili kwa Kiingereza",
+          ? `Hello${user ? ` ${user.name}` : ''}! I'm PesaBot, your intelligent financial assistant. I can help with:
+• Any financial questions or calculations
+• Savings, investments, loans, and budgeting
+• Chama management and insights
+• Financial planning for goals
+• Analyzing your spending patterns
+• Comparing financial options
+
+Just ask naturally like you would a financial expert!
+Say 'Swahili' to switch languages`
+          : `Habari${user ? ` ${user.name}` : ''}! Mimi ni PesaBot, msaidizi wako wa kifedha. Naweza kusaidia kwa:
+• Maswali yoyote ya kifedha au mahesabu
+• Akiba, uwekezaji, mikopo na bajeti
+• Usimamizi wa chama na ushauri
+• Mipango ya kifedha kwa malengo
+• Kuchambua matumizi yako
+• Kulinganisha chaguzi za kifedha
+
+Uliza kwa lugha yoyote unayoelewa!
+Sema 'English' kubadilisha lugha`,
         sender: "bot",
         timestamp: new Date(),
       }
@@ -59,7 +68,7 @@ export default function PesaBotWidget() {
   // Load user when widget opens
   useEffect(() => {
     if (isOpen) {
-      const fetchUser = async () => {
+      const loadUserData = async () => {
         try {
           const currentUser = await getCurrentUser()
           setUser(currentUser)
@@ -67,7 +76,7 @@ export default function PesaBotWidget() {
           console.error("Failed to fetch user:", error)
         }
       }
-      fetchUser()
+      loadUserData()
     }
   }, [isOpen])
 
@@ -75,48 +84,52 @@ export default function PesaBotWidget() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
-const fetchFinancialData = async () => {
-  try {
-    // Fetch all data with individual error handling
-    const [balanceRes, transactionsRes, savingsRes, loansRes, chamasRes, frequentRecipientsRes] = await Promise.all([
-      fetch('/api/user/balance').catch(() => ({ ok: false })),
-      fetch('/api/transactions?limit=5').catch(() => ({ ok: false })),
-      fetch('/api/savings/goals').catch(() => ({ ok: false })),
-      fetch('/api/loans').catch(() => ({ ok: false })),
-      fetch('/api/chamas').catch(() => ({ ok: false })),
-      fetch('/api/payments/frequent-recipients').catch(() => ({ ok: false }))
-    ]);
 
-    // Process responses with fallbacks
-    return {
-      balance: balanceRes.ok ? (await balanceRes.json()).balance : 0,
-      transactions: transactionsRes.ok ? (await transactionsRes.json()).transactions : [],
-      savingsGoals: savingsRes.ok ? (await savingsRes.json()).goals : [],
-      loans: loansRes.ok ? (await loansRes.json()).loans : [],
-      chamas: chamasRes.ok ? (await chamasRes.json()).chamas : [],
-      frequentRecipients: frequentRecipientsRes.ok ? (await frequentRecipientsRes.json()).recipients : []
-    };
-  } catch (error) {
-    console.error("Financial data error:", error);
-    // Return empty/default data if there's an error
-    return {
-      balance: 0,
-      transactions: [],
-      savingsGoals: [],
-      loans: [],
-      chamas: [],
-      frequentRecipients: []
-    };
+  // Enhanced financial data fetcher
+  const fetchFinancialContext = async () => {
+    try {
+      const [balanceRes, transactionsRes, savingsRes, loansRes, investmentsRes, chamasRes, profileRes] = await Promise.all([
+        fetch('/api/user/balance').catch(() => ({ ok: false })),
+        fetch('/api/transactions?limit=6').catch(() => ({ ok: false })),
+        fetch('/api/savings').catch(() => ({ ok: false })),
+        fetch('/api/loans').catch(() => ({ ok: false })),
+        fetch('/api/investments').catch(() => ({ ok: false })),
+        fetch('/api/chamas').catch(() => ({ ok: false })),
+        fetch('/api/user/profile').catch(() => ({ ok: false }))
+      ])
+
+      return {
+        balance: balanceRes.ok ? (await balanceRes.json()).balance : 0,
+        transactions: transactionsRes.ok ? (await transactionsRes.json()).transactions : [],
+        savings: savingsRes.ok ? (await savingsRes.json()).goals : [],
+        loans: loansRes.ok ? (await loansRes.json()).loans : [],
+        investments: investmentsRes.ok ? (await investmentsRes.json()).investments : [],
+        chamas: chamasRes.ok ? (await chamasRes.json()).chamas : [],
+        profile: profileRes.ok ? (await profileRes.json()).profile : null,
+        monthlyIncome: profileRes.ok ? (await profileRes.json()).profile?.monthlyIncome : 0
+      }
+    } catch (error) {
+      console.error("Financial data error:", error)
+      return {
+        balance: 0,
+        transactions: [],
+        savings: [],
+        loans: [],
+        investments: [],
+        chamas: [],
+        profile: null,
+        monthlyIncome: 0
+      }
+    }
   }
-};
 
-  const handleLanguageSwitch = (lang: string) => {
-    if (lang.toLowerCase().includes("swahili")) {
+  const handleLanguageSwitch = (msg: string) => {
+    if (msg.toLowerCase().includes("swahili")) {
       setLanguage("sw")
       return language === "en" 
         ? "Sawa! Nimebadilisha lugha kwa Kiswahili. Unaweza kuuliza sasa." 
         : "Tayari ninatumia Kiswahili."
-    } else if (lang.toLowerCase().includes("english")) {
+    } else if (msg.toLowerCase().includes("english")) {
       setLanguage("en")
       return language === "sw" 
         ? "Got it! I've switched to English. You can ask now." 
@@ -125,122 +138,49 @@ const fetchFinancialData = async () => {
     return null
   }
 
-  const handleFinancialQuery = async (message: string) => {
-    const lowerMsg = message.toLowerCase()
-    
-    // Check for language switch first
+  // Enhanced AI response handler
+  const getAIResponse = async (message: string) => {
     const langResponse = handleLanguageSwitch(message)
     if (langResponse) return langResponse
 
     try {
-      const { balance, transactions, savingsGoals, loans, chamas, frequentRecipients } = await fetchFinancialData()
+      const financialData = await fetchFinancialContext()
+      const { balance, monthlyIncome, loans, savings, chamas, profile } = financialData
 
-      if (language === "sw") {
-        // Swahili responses
-        if (lowerMsg.includes("salio") || lowerMsg.includes("pesa")) {
-          if (!user) return "Tafadhali ingia kwanza kuangalia salio lako"
-          return `Salio lako ni ${formatCurrency(balance)}`
-        }
+      // Construct context-aware prompt
+      const contextPrompt = `User Financial Context:
+- Balance: ${formatCurrency(balance)}
+- Monthly Income: ${formatCurrency(monthlyIncome)}
+- Active Loans: ${loans.length} (Total: ${formatCurrency(loans.reduce((sum, loan) => sum + loan.balance, 0))})
+- Savings Goals: ${savings.length}
+- Chama Memberships: ${chamas.length}
+- Family Size: ${profile?.familySize || 1}
+- Location: ${profile?.location || 'Nairobi'}
 
-        if (lowerMsg.includes("manunuzi") || lowerMsg.includes("transactions")) {
-          if (!user) return "Tafadhali ingia kwanza kuona manunuzi yako"
-          if (!transactions?.length) return "Hakuna manunuzi ya hivi karibuni"
-          return `Manunuzi 5 ya hivi karibuni:\n${transactions.slice(0, 5).map(txn => 
-            `• ${txn.description}: ${formatCurrency(txn.amount)} (${new Date(txn.date).toLocaleDateString()})`
-          ).join('\n')}`
-        }
+Current Question: "${message}"`
 
-        if (lowerMsg.includes("akiba") || lowerMsg.includes("akiba")) {
-          if (!user) return "Tafadhali ingia kwanza kuona malengo yako ya akiba"
-          if (!savingsGoals?.length) return "Huna malengo ya akiba kwa sasa"
-          return `Malengo yako ya akiba:\n${savingsGoals.map(goal => 
-            `• ${goal.name}: ${formatCurrency(goal.currentAmount)} ya ${formatCurrency(goal.targetAmount)}`
-          ).join('\n')}`
-        }
+      const systemPrompt = language === "sw" 
+        ? `You are PesaBot, msaidizi wa kifedha wa Kenya. Kanuni:
+1. Jibu kwa mazungumzo ya kirafiki kama rafiki mwenye ujuzi wa fedha
+2. Tumia muktadha wa kifedha uliopewa
+3. Fanya mahesabu inapohitajika
+4. Toa chaguzi nyingi
+5. Zingatia mambo ya uchumi wa Kenya
+6. Kamwe usitoe maelezo ya akaunti yoyote au nenosiri
+7. Toa maelezo ya kina na mifano halisi
+8. Thibitisha uwezo wa mteja kabla ya kupendekeza
+9. Sema ukweli kuhusu hatari na changamoto`
+        : `You are PesaBot, Kenya's smartest financial assistant. Rules:
+1. Answer naturally like a knowledgeable financial friend
+2. Use the provided financial context
+3. Make calculations when needed
+4. Offer multiple options/paths
+5. Consider Kenyan economic factors
+6. Never reveal any account details or passwords
+7. Provide detailed explanations with real examples
+8. Verify affordability before recommending
+9. Be honest about risks and challenges`
 
-        if (lowerMsg.includes("mkopo") || lowerMsg.includes("mikopo")) {
-          if (!user) return "Tafadhali ingia kwanza kuona mikopo yako"
-          if (!loans?.length) return "Huna mikopo kwa sasa"
-          return `Mikopo yako:\n${loans.map(loan => 
-            `• ${loan.purpose}: ${formatCurrency(loan.amount)} (${loan.status})`
-          ).join('\n')}`
-        }
-
-        if (lowerMsg.includes("chama") || lowerMsg.includes("vyama")) {
-          if (!user) return "Tafadhali ingia kwanza kuona vyama vyako"
-          if (!chamas?.length) return "Hujajiunga na chama chochote"
-          return `Vyama ulivyojiunga:\n${chamas.map(chama => 
-            `• ${chama.name}: ${formatCurrency(chama.balance)} (${chama.memberCount} wanachama)`
-          ).join('\n')}`
-        }
-
-        if (lowerMsg.includes("marakwa") || lowerMsg.includes("marakwa")) {
-          if (!user) return "Tafadhali ingia kwanza kuona watu unaotuma pesa mara kwa mara"
-          if (!frequentRecipients?.length) return "Huna watu unaotuma pesa mara kwa mara"
-          return `Watu unaotuma pesa mara kwa mara:\n${frequentRecipients.slice(0, 5).map(recipient => 
-            `• ${recipient.name}: ${formatCurrency(recipient.totalAmount)} (${recipient.count} mara)`
-          ).join('\n')}`
-        }
-
-      } else {
-        // English responses
-        if (lowerMsg.includes("balance") || lowerMsg.includes("how much")) {
-          if (!user) return "Please log in to check your balance"
-          return `Your current balance is ${formatCurrency(balance)}`
-        }
-
-        if (lowerMsg.includes("transaction") || lowerMsg.includes("history")) {
-          if (!user) return "Please log in to view transactions"
-          if (!transactions?.length) return "No recent transactions found"
-          return `Recent 5 transactions:\n${transactions.slice(0, 5).map(txn => 
-            `• ${txn.description}: ${formatCurrency(txn.amount)} (${new Date(txn.date).toLocaleDateString()})`
-          ).join('\n')}`
-        }
-
-        if (lowerMsg.includes("savings") || lowerMsg.includes("goal")) {
-          if (!user) return "Please log in to view savings goals"
-          if (!savingsGoals?.length) return "You don't have any savings goals"
-          return `Your savings goals:\n${savingsGoals.map(goal => 
-            `• ${goal.name}: ${formatCurrency(goal.currentAmount)} of ${formatCurrency(goal.targetAmount)}`
-          ).join('\n')}`
-        }
-
-        if (lowerMsg.includes("loan") || lowerMsg.includes("debt")) {
-          if (!user) return "Please log in to view your loans"
-          if (!loans?.length) return "You don't have any active loans"
-          return `Your loans:\n${loans.map(loan => 
-            `• ${loan.purpose}: ${formatCurrency(loan.amount)} (${loan.status})`
-          ).join('\n')}`
-        }
-
-        if (lowerMsg.includes("chama") || lowerMsg.includes("group")) {
-          if (!user) return "Please log in to view your chamas"
-          if (!chamas?.length) return "You haven't joined any chamas"
-          return `Your chamas:\n${chamas.map(chama => 
-            `• ${chama.name}: ${formatCurrency(chama.balance)} (${chama.memberCount} members)`
-          ).join('\n')}`
-        }
-
-        if (lowerMsg.includes("frequent") || lowerMsg.includes("recipients")) {
-          if (!user) return "Please log in to view frequent recipients"
-          if (!frequentRecipients?.length) return "You don't have frequent recipients"
-          return `People you send money to frequently:\n${frequentRecipients.slice(0, 5).map(recipient => 
-            `• ${recipient.name}: ${formatCurrency(recipient.totalAmount)} (${recipient.count} times)`
-          ).join('\n')}`
-        }
-      }
-
-      return null
-    } catch (error) {
-      console.error("Financial query error:", error)
-      return language === "sw" 
-        ? "Samahani, sikuweza kupata taarifa zako za kifedha. Tafadhali jaribu tena baadaye." 
-        : "Sorry, I couldn't fetch your financial data. Please try again later."
-    }
-  }
-
-  const getGroqResponse = async (prompt: string): Promise<string> => {
-    try {
       const response = await fetch(GROQ_API_URL, {
         method: "POST",
         headers: {
@@ -248,39 +188,27 @@ const fetchFinancialData = async () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama3-8b-8192",
+          model: "llama3-70b-8192",
           messages: [
-            {
-              role: "system",
-              content: language === "sw" 
-                ? `You are PesaBot, msaidizi wa kifedha wa Kenya. Kanuni:
-1. Toa msaada wa kifedha kwa Kiswahili rahisi
-2. Usishauri bei za hisa moja kwa moja
-3. Toa majibu mafupi (vifungu 1-2)
-4. Kwa data ya akaunti, sema "Angalia kwenye programu yako"
-5. Usitoae taarifa za watu wengine`
-                : `You are PesaBot, a Kenyan financial assistant. Rules:
-1. Provide financial advice in simple ${language === "sw" ? "Swahili" : "English"}
-2. Never recommend specific investments
-3. Keep responses concise (1-2 sentences)
-4. For account data, say "Check your app"
-5. Never share other users' information`,
-            },
-            { role: "user", content: prompt },
+            { role: "system", content: systemPrompt },
+            { role: "user", content: contextPrompt },
           ],
           temperature: 0.7,
-          max_tokens: 150,
+          max_tokens: 500,
         }),
       })
 
       if (!response.ok) throw new Error(`API error: ${response.status}`)
+      
       const data = await response.json()
       return data.choices[0]?.message?.content || 
-        (language === "sw" ? "Sijaelewa, tafadhali uliza kwa njia nyingine" : "I didn't understand, please rephrase")
+        (language === "sw" 
+          ? "Samahani, sikuweza kujibu. Tafadhali jaribu kuuliza kwa njia nyingine." 
+          : "Sorry, I couldn't respond. Please try rephrasing your question.")
     } catch (error) {
-      console.error("Groq API error:", error)
+      console.error("AI response error:", error)
       return language === "sw" 
-        ? "Nimekua na shida kiufundi. Jaribu tena baadaye." 
+        ? "Nimekua na shida kiufundi. Tafadhali jaribu tena baadaye." 
         : "I'm having technical issues. Please try again later."
     }
   }
@@ -301,21 +229,14 @@ const fetchFinancialData = async () => {
     setIsTyping(true)
 
     try {
-      // 1. Check for exit commands
+      // Check for exit commands
       if (["bye", "kwaheri", "exit"].some(word => message.toLowerCase().includes(word))) {
         addBotMessage(language === "sw" ? "Kwaheri! Karibu tena muda wowote." : "Goodbye! Come back anytime.")
         return
       }
 
-      // 2. Handle financial queries
-      const financialResponse = await handleFinancialQuery(message)
-      if (financialResponse) {
-        addBotMessage(financialResponse)
-        return
-      }
-
-      // 3. Get AI response for general questions
-      const aiResponse = await getGroqResponse(message)
+      // Get AI response
+      const aiResponse = await getAIResponse(message)
       addBotMessage(aiResponse)
 
     } catch (error) {
