@@ -107,7 +107,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Wallet Section */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Main Balance</CardTitle>
@@ -116,26 +116,10 @@ export default function DashboardPage() {
             <div className="text-2xl font-bold">
               {formatCurrency(currentUser?.balance ?? 0, 'KES')}
             </div>
-            <div className="text-sm text-muted-foreground">
-              Test balance: {formatCurrency(currentUser?.testingBalance ?? 1000, 'KES')}
-            </div>
           </CardContent>
         </Card>
         
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Account Info</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm space-y-1">
-              <p><span className="font-medium">Email:</span> {currentUser?.email}</p>
-              <p><span className="font-medium">Phone:</span> {currentUser?.phone}</p>
-              <p><span className="font-medium">Member since:</span> {currentUser?.createdAt ? new Date(currentUser.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}</p>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="md:col-span-2 lg:col-span-1">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Quick Actions</CardTitle>
           </CardHeader>
@@ -197,9 +181,8 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Transactions & Insights */}
+        {/* Transactions */}
         <div className="space-y-6">
-          {/* Transactions */}
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold">Recent Transactions</h2>
@@ -217,27 +200,6 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Quick Stats */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Account Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm">Total Balance:</span>
-                <span className="font-medium">{formatCurrency(currentUser?.balance ?? 0, 'KES')}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm">Testing Funds:</span>
-                <span className="font-medium">{formatCurrency(currentUser?.testingBalance ?? 1000, 'KES')}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm">Active Chamas:</span>
-                <span className="font-medium">{(data?.chamas ?? []).length}</span>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>

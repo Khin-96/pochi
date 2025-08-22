@@ -51,7 +51,6 @@ export async function GET() {
         email: user.email,
         phone: user.phone,
         balance: user.balance || 0,
-        testingBalance: user.testingBalance || 1000,
         avatar: user.avatar
       },
       chamas: chamas.map(chama => ({
