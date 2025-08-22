@@ -5,6 +5,14 @@ import { getCurrentUser } from '@/lib/auth'
 
 export async function POST(request: Request) {
   try {
+    // Check if Pusher is properly configured
+    if (!process.env.PUSHER_APP_ID || !process.env.PUSHER_SECRET) {
+      return NextResponse.json(
+        { error: 'Pusher not configured' },
+        { status: 500 }
+      )
+    }
+
     const user = await getCurrentUser()
     if (!user?._id) {
       return NextResponse.json(

@@ -8,20 +8,28 @@ const key = process.env.NEXT_PUBLIC_PUSHER_APP_KEY;
 const secret = process.env.PUSHER_SECRET;
 const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
 
-// Check if all required environment variables are present
-if (!appId || !key || !secret || !cluster) {
-  throw new Error('Missing Pusher environment variables');
-}
+// Check if we're in a server environment and all required variables are present
+const isServer = typeof window === 'undefined';
+const hasServerVars = appId && key && secret && cluster;
 
-export const pusherServer = new PusherServer({
-  appId,
-  key,
-  secret,
-  cluster,
-  useTLS: true,
-});
+export const pusherServer = isServer && hasServerVars
+  ? new PusherServer({
+      appId: appId!,
+      key: key!,
+      secret: secret!,
+      cluster: cluster!,
+      useTLS: true,
+    })
+  : {
+      // Provide a mock implementation for build time
+      authorizeChannel: () => {
+        throw new Error('Pusher environment variables not configured');
+      }
+    };
 
-export const pusherClient = new PusherClient(key, {
-  cluster,
-  forceTLS: true, // Added for better security
-});
+export const pusherClient = key && cluster
+  ? new PusherClient(key, {
+      cluster,
+      forceTLS: true,
+    })
+  : null;
