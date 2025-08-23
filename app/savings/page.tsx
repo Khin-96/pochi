@@ -90,35 +90,38 @@ export default function SavingsPage() {
   })
 
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true)
-      try {
-        const [userData, savingsData] = await Promise.all([
-          getCurrentUser(),
-          fetchSavingsGoals()
-        ])
+  const loadData = async () => {
+    setIsLoading(true)
+    try {
+      const [userData, savingsData] = await Promise.all([
+        getCurrentUser(),
+        fetchSavingsGoals()
+      ])
 
-        if (!userData) {
-          throw new Error("User not authenticated")
-        }
-
-        setUser(userData)
-        setGoals(savingsData?.goals || [])
-      } catch (error) {
-        console.error("Failed to fetch savings data:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load savings data. Please try again.",
-          variant: "destructive",
-        })
-        router.push("/login") // Redirect if not authenticated
-      } finally {
-        setIsLoading(false)
+      if (!userData) {
+        // Don't throw error, just handle gracefully
+        console.warn("User not authenticated");
+        setGoals([]);
+        return;
       }
-    }
 
-    loadData()
-  }, [toast, router])
+      setUser(userData)
+      setGoals(savingsData?.goals || [])
+    } catch (error) {
+      console.error("Failed to fetch savings data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load savings data. Please try again.",
+        variant: "destructive",
+      })
+      // Don't redirect automatically, let user stay on page
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  loadData()
+}, [toast])
 
   async function onCreateGoal(values: z.infer<typeof createGoalSchema>) {
     setIsCreating(true)

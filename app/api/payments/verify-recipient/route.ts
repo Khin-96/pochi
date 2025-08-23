@@ -1,6 +1,7 @@
 // [file name]: route.ts
 import { NextResponse } from 'next/server';
 import { findUserByEmail, findUserByPhone } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth'; // Add this import
 
 // Helper function to normalize phone numbers
 const normalizePhone = (phone: string): string => {
@@ -53,8 +54,8 @@ export async function POST(req: Request) {
     }
 
     // Check if user is trying to send to themselves
-    // This check should be done in the frontend, but we'll add it here for security
-    const currentUser = await getCurrentUser(); // You'll need to implement this
+    const currentUser = await getCurrentUser(); // This should now work
+    
     if (currentUser && 
         ((type === 'phone' && user.phone === currentUser.phone) || 
          (type === 'email' && user.email === currentUser.email))) {

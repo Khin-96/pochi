@@ -10,6 +10,7 @@ import {
 import { authOptions } from '@/lib/authOptions';
 import { getServerSession } from 'next-auth';
 import { sendMoneySchema } from '@/lib/validation';
+import jwt from 'jsonwebtoken';
 
 // Reuse the same phone normalization function
 const normalizePhone = (phone: string): string => {
@@ -26,12 +27,38 @@ const normalizePhone = (phone: string): string => {
   return digits;
 };
 
+async function getCustomAuthToken(req: Request): Promise<string | null> {
+  const cookieHeader = req.headers.get('cookie');
+  if (!cookieHeader) return null;
+  
+  const cookies = cookieHeader.split(';').map(cookie => cookie.trim());
+  const tokenCookie = cookies.find(cookie => cookie.startsWith('pochiyangu_token='));
+  
+  if (!tokenCookie) return null;
+  
+  return tokenCookie.split('=')[1];
+}
+
 export async function POST(req: Request) {
   try {
-    // Check authentication via session only
+    // Check authentication via both NextAuth session and custom token
     const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
+    const customToken = await getCustomAuthToken(req);
+
+    let userId: string | undefined;
+
+    if (session?.user?.id) {
+      userId = session.user.id;
+    } else if (customToken) {
+      try {
+        const decoded = jwt.verify(customToken, process.env.JWT_SECRET || "your-fallback-secret-for-development");
+        userId = (decoded as any).userId;
+      } catch (error) {
+        console.error("Custom token verification failed:", error);
+      }
+    }
+
+    if (!userId) {
       return NextResponse.json(
         { error: "Not authenticated - please login again" },
         { status: 401 }
@@ -60,8 +87,8 @@ export async function POST(req: Request) {
       description 
     } = validation.data;
 
-    // Use the authenticated user ID from session
-    const senderId = session.user.id;
+    // Use the authenticated user ID
+    const senderId = userId;
 
     // Get sender details
     const sender = await findUserById(senderId);

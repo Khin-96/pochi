@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { DownloadIcon } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
+import { useSession } from "next-auth/react";
 import {
   Dialog,
   DialogContent,
@@ -83,6 +84,11 @@ export default function PaymentsPage() {
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [isUserLoaded, setIsUserLoaded] = useState(false);
   const { toast } = useToast();
+  
+  // Remove useSession if not needed, or handle the session properly
+  // If you need session data, ensure your app is wrapped in SessionProvider
+  // For now, I'll remove it since it's not being used in the component
+  // const { data: session, status } = useSession();
 
   const form = useForm<z.infer<typeof sendMoneySchema>>({
     resolver: zodResolver(sendMoneySchema),
@@ -109,14 +115,14 @@ export default function PaymentsPage() {
         ]);
         
         if (userData) {
-  // Just ensure balance is a number, don't overcomplicate
-  const userWithNumberBalance = {
-    ...userData,
-    balance: Number(userData.balance) || 0
-  };
-  setUser(userWithNumberBalance);
-  setIsUserLoaded(true);
-}
+          // Just ensure balance is a number, don't overcomplicate
+          const userWithNumberBalance = {
+            ...userData,
+            balance: Number(userData.balance) || 0
+          };
+          setUser(userWithNumberBalance);
+          setIsUserLoaded(true);
+        }
         
         setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
       } catch (error) {
@@ -199,108 +205,119 @@ export default function PaymentsPage() {
   };
 
   const handleConfirmSend = async () => {
-    setIsSending(true);
+  setIsSending(true);
+  
+  try {
+    const values = form.getValues();
     
-    try {
-      const values = form.getValues();
-      
-      // Validate amount is a positive number
-      const amountNum = Number(values.amount);
-      if (isNaN(amountNum) || amountNum <= 0) {
-        throw new Error("Please enter a valid amount");
-      }
+    // Validate amount is a positive number
+    const amountNum = Number(values.amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      throw new Error("Please enter a valid amount");
+    }
 
-      // Structure the request data properly
-      const requestData = {
-        recipientType: values.recipientType,
-        recipientPhone: values.recipientType === "phone" ? values.recipientPhone : undefined,
-        recipientEmail: values.recipientType === "email" ? values.recipientEmail : undefined,
-        amount: amountNum.toString(),
-        description: values.description || "",
-      };
-
-      const response = await sendMoney(requestData);
-
-      // Show success message
-      toast({
-        title: "Transfer Successful",
-        description: `${formatCurrency(amountNum)} sent to ${values.recipientName || (values.recipientType === 'phone' ? values.recipientPhone : values.recipientEmail)}`,
-      });
-
-      // Refresh user data and transactions
-      const [updatedUser, updatedTransactions] = await Promise.all([
-        getCurrentUser(),
-        fetchTransactions()
-      ]);
-
-      if (updatedUser) {
-        setUser({
-          ...updatedUser,
-          balance: Number(updatedUser.balance) || 0
-        });
-      }
-
-      if (Array.isArray(updatedTransactions)) {
-        setTransactions(updatedTransactions);
-      }
-
-      // Reset form
-      form.reset({
-        recipientType: "phone",
-        recipientPhone: "",
-        recipientEmail: "",
-        amount: "",
-        description: "",
-        recipientName: "",
-      });
-
-      } catch (error: any) {
-        console.error("Send money error:", error);
-        
-        let errorMessage = "Failed to complete transaction";
-        let showRetry = false;
-
-        // Handle specific error cases with more user-friendly messages
-        if (error.message.includes("Validation failed:")) {
-          // Extract and format validation errors
-          errorMessage = error.message.replace("Validation failed: ", "");
-        } else if (error.message.includes("Not authenticated")) {
-          errorMessage = "Your session has expired. Please login again.";
-        } else if (error.message.includes("balance")) {
-          errorMessage = "Insufficient funds for this transaction";
-        } else if (error.message.includes("network")) {
-          errorMessage = "Network error - please check your connection";
-          showRetry = true;
-        } else if (error.message.includes("not found")) {
-          errorMessage = "Recipient account not found. Please verify the details.";
-        } else if (error.message.includes("Cannot send money to yourself")) {
-          errorMessage = "You cannot send money to yourself";
-        } else {
-          errorMessage = error.message || errorMessage;
-        }
-
-        toast({
-          title: "Transfer Failed",
-          description: errorMessage,
-          variant: "destructive",
-          action: showRetry ? (
-            <Button 
-              variant="ghost" 
-              onClick={handleConfirmSend}
-              className="text-blue-600 hover:text-blue-800"
-            >
-              Retry
-            </Button>
-          ) : undefined,
-        });
-
-        // Store error for form display
-        setVerificationError(errorMessage);
-      } finally {
-        setIsSending(false);
-        setShowConfirmation(false);
-      }
+    // Structure the request data properly
+    const requestData = {
+      recipientType: values.recipientType,
+      recipientPhone: values.recipientType === "phone" ? values.recipientPhone : undefined,
+      recipientEmail: values.recipientType === "email" ? values.recipientEmail : undefined,
+      amount: amountNum.toString(),
+      description: values.description || "",
     };
+
+    const response = await sendMoney(requestData);
+
+    // Show success message
+    toast({
+      title: "Transfer Successful",
+      description: `${formatCurrency(amountNum)} sent to ${values.recipientName || (values.recipientType === 'phone' ? values.recipientPhone : values.recipientEmail)}`,
+    });
+
+    // Refresh user data and transactions
+    const [updatedUser, updatedTransactions] = await Promise.all([
+      getCurrentUser(),
+      fetchTransactions()
+    ]);
+
+    if (updatedUser) {
+      setUser({
+        ...updatedUser,
+        balance: Number(updatedUser.balance) || 0
+      });
+    }
+
+    if (Array.isArray(updatedTransactions)) {
+      setTransactions(updatedTransactions);
+    }
+
+    // Reset form
+    form.reset({
+      recipientType: "phone",
+      recipientPhone: "",
+      recipientEmail: "",
+      amount: "",
+      description: "",
+      recipientName: "",
+    });
+
+  } catch (error: any) {
+    console.error("Send money error:", error);
+    
+    let errorMessage = "Failed to complete transaction";
+    let showRetry = false;
+    let redirectToLogin = false;
+
+    // Handle specific error cases
+    if (error.message.includes("Session expired")) {
+      errorMessage = "Your session has expired. Please login again.";
+      redirectToLogin = true;
+    } else if (error.message.includes("Validation failed:")) {
+      errorMessage = error.message.replace("Validation failed: ", "");
+    } else if (error.message.includes("Not authenticated")) {
+      errorMessage = "Your session has expired. Please login again.";
+      redirectToLogin = true;
+    } else if (error.message.includes("balance")) {
+      errorMessage = "Insufficient funds for this transaction";
+    } else if (error.message.includes("network")) {
+      errorMessage = "Network error - please check your connection";
+      showRetry = true;
+    } else if (error.message.includes("not found")) {
+      errorMessage = "Recipient account not found. Please verify the details.";
+    } else if (error.message.includes("Cannot send money to yourself")) {
+      errorMessage = "You cannot send money to yourself";
+    } else {
+      errorMessage = error.message || errorMessage;
+    }
+
+    toast({
+      title: "Transfer Failed",
+      description: errorMessage,
+      variant: "destructive",
+      action: showRetry ? (
+        <Button 
+          variant="ghost" 
+          onClick={handleConfirmSend}
+          className="text-blue-600 hover:text-blue-800"
+        >
+          Retry
+        </Button>
+      ) : undefined,
+    });
+
+    // Store error for form display
+    setVerificationError(errorMessage);
+
+    // Redirect to login if session expired
+    if (redirectToLogin) {
+      setTimeout(() => {
+        window.location.href = '/auth/login';
+      }, 2000);
+    }
+  } finally {
+    setIsSending(false);
+    setShowConfirmation(false);
+  }
+};
 
   const handleCancelSend = () => {
     setShowConfirmation(false);

@@ -51,7 +51,6 @@ export async function logout() {
 
 export async function getCurrentUser(): Promise<User | null> {
   try {
-    // Use NextAuth session instead of custom endpoint
     const response = await fetch("/api/auth/session", {
       credentials: 'include',
       headers: {
@@ -64,7 +63,19 @@ export async function getCurrentUser(): Promise<User | null> {
     }
 
     const session = await response.json();
-    return session.user || null;
+    
+    if (!session.user) {
+      return null;
+    }
+
+    return {
+      id: session.user.id,
+      name: session.user.name || '',
+      email: session.user.email || '',
+      phone: session.user.phone || '',
+      balance: Number(session.user.balance) || 0,
+      avatar: session.user.image || undefined,
+    };
   } catch (error) {
     console.error("Failed to fetch current user:", error);
     return null;
@@ -809,7 +820,6 @@ export async function createInvestment(investmentData: any) {
   return response.json().then((data) => data.investment);
 }
 
-// Payments functions - UPDATED to use session only
 export async function sendMoney(requestData: any) {
   try {
     const response = await fetch("/api/payments/send", {
@@ -817,17 +827,17 @@ export async function sendMoney(requestData: any) {
       headers: {
         "Content-Type": "application/json",
       },
-      credentials: 'include', // This ensures session cookies are sent
+      credentials: 'include',
       body: JSON.stringify(requestData),
     });
 
     if (!response.ok) {
-      // Handle 401 specifically
+      const errorData = await response.json();
+      
       if (response.status === 401) {
         throw new Error("Session expired. Please login again.");
       }
       
-      const errorData = await response.json();
       if (errorData.issues) {
         const validationErrors = errorData.issues
           .map((issue: any) => `${issue.path.join('.')}: ${issue.message}`)
