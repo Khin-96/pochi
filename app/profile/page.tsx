@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -22,17 +21,45 @@ import {
   Phone, 
   Mail, 
   MapPin, 
-  Calendar, 
+  Calendar,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Save,
+  X
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { fetchUserProfile, updateUserProfile, updateNotificationPreferences, updateSecuritySettings, logout } from "@/lib/api"
+import { getCurrentUser, logout, type AuthUser } from "@/lib/auth"
+import { updateUserProfile, updateNotificationPreferences, updateSecuritySettings, fetchUserStats } from "@/lib/api"
+
+interface UserStats {
+  chamasJoined: number;
+  totalSavings: number;
+  totalInvestments: number;
+  activeLoans: number;
+  currency: string;
+}
+
+interface NotificationPreferences {
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+  smsNotifications: boolean;
+  chamaUpdates: boolean;
+  paymentReminders: boolean;
+  securityAlerts: boolean;
+}
+
+interface SecuritySettings {
+  twoFactorEnabled: boolean;
+  loginAlerts: boolean;
+  sessionTimeout: number;
+}
 
 export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true)
-  const [userData, setUserData] = useState<any>(null)
+  const [userProfile, setUserProfile] = useState<AuthUser | null>(null)
+  const [userStats, setUserStats] = useState<UserStats | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [activeTab, setActiveTab] = useState("profile")
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -40,22 +67,75 @@ export default function ProfilePage() {
     location: "",
     bio: "",
   })
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>({
+    emailNotifications: true,
+    pushNotifications: true,
+    smsNotifications: false,
+    chamaUpdates: true,
+    paymentReminders: true,
+    securityAlerts: true
+  })
+  const [securitySettings, setSecuritySettings] = useState<SecuritySettings>({
+    twoFactorEnabled: false,
+    loginAlerts: true,
+    sessionTimeout: 24
+  })
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  })
   const { toast } = useToast()
 
   useEffect(() => {
-    // Fetch user profile data
-    const fetchProfile = async () => {
+    const fetchProfileData = async () => {
       setIsLoading(true)
       try {
-        const profileData = await fetchUserProfile()
-        setUserData(profileData)
+        // Fetch current user using the same method as dashboard
+        const user = await getCurrentUser()
+        
+        if (!user) {
+          toast({
+            title: "Error",
+            description: "Please login to view your profile",
+            variant: "destructive",
+          })
+          window.location.href = "/login"
+          return
+        }
+        
+        setUserProfile(user)
         setFormData({
-          name: profileData.profile.name,
-          email: profileData.profile.email,
-          phone: profileData.profile.phone,
-          location: profileData.profile.location,
-          bio: profileData.profile.bio,
+          name: user.name,
+          email: user.email,
+          phone: user.phone || "",
+          location: user.location || "",
+          bio: user.bio || "",
         })
+
+        // Fetch user stats if available
+        try {
+          const stats = await fetchUserStats()
+          setUserStats(stats)
+        } catch (error) {
+          console.error("Failed to fetch user stats:", error)
+        }
+
+        // Fetch notification preferences if available
+        try {
+          // This would typically come from your API
+          // For now, we'll use the default state
+        } catch (error) {
+          console.error("Failed to fetch notification preferences:", error)
+        }
+
+        // Fetch security settings if available
+        try {
+          // This would typically come from your API
+          // For now, we'll use the default state
+        } catch (error) {
+          console.error("Failed to fetch security settings:", error)
+        }
       } catch (error) {
         console.error("Failed to fetch profile:", error)
         toast({
@@ -63,88 +143,12 @@ export default function ProfilePage() {
           description: "Failed to load profile data. Please try again.",
           variant: "destructive",
         })
-        
-        // Fallback to mock data if API fails
-        const mockUserData = {
-          profile: {
-            id: "user-001",
-            name: "John Kamau",
-            email: "john.kamau@example.com",
-            phone: "+254 712 345 678",
-            avatar: "/placeholder.svg",
-            location: "Nairobi, Kenya",
-            joinDate: "2023-09-15",
-            verificationStatus: "verified",
-            bio: "Passionate about community savings and investments. Active member of multiple chamas.",
-          },
-          stats: {
-            chamasJoined: 3,
-            totalSavings: 45000,
-            totalInvestments: 75000,
-            activeLoans: 1,
-            currency: "KES",
-          },
-          notifications: {
-            email: true,
-            push: true,
-            sms: false,
-            marketing: false,
-            chamaUpdates: true,
-            transactionAlerts: true,
-            investmentUpdates: true,
-            loanReminders: true,
-          },
-          security: {
-            twoFactorEnabled: true,
-            lastPasswordChange: "2024-03-10",
-            loginAlerts: true,
-            transactionPinEnabled: true,
-            biometricEnabled: false,
-          },
-          paymentMethods: [
-            {
-              id: "pm-001",
-              type: "M-Pesa",
-              number: "******6789",
-              isDefault: true,
-            },
-            {
-              id: "pm-002",
-              type: "Bank Account",
-              number: "****5432",
-              bank: "Equity Bank",
-              isDefault: false,
-            }
-          ],
-          verificationDocuments: [
-            {
-              type: "ID Card",
-              status: "verified",
-              dateSubmitted: "2023-09-15",
-              dateVerified: "2023-09-17",
-            },
-            {
-              type: "Proof of Address",
-              status: "verified",
-              dateSubmitted: "2023-09-15",
-              dateVerified: "2023-09-18",
-            }
-          ]
-        }
-        setUserData(mockUserData)
-        setFormData({
-          name: mockUserData.profile.name,
-          email: mockUserData.profile.email,
-          phone: mockUserData.profile.phone,
-          location: mockUserData.profile.location,
-          bio: mockUserData.profile.bio,
-        })
       } finally {
         setIsLoading(false)
       }
     }
     
-    fetchProfile()
+    fetchProfileData()
   }, [toast])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -152,19 +156,33 @@ export default function ProfilePage() {
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setPasswordData(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleNotificationChange = (key: keyof NotificationPreferences) => {
+    setNotificationPrefs(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }))
+  }
+
+  const handleSecurityChange = (key: keyof SecuritySettings, value: any) => {
+    setSecuritySettings(prev => ({
+      ...prev,
+      [key]: value
+    }))
+  }
+
   const handleSaveProfile = async () => {
+    if (!userProfile) return
+
     try {
-      // Update profile via API
-      const updatedProfile = await updateUserProfile(formData)
+      await updateUserProfile(formData)
       
       // Update local state
-      setUserData(prev => ({
-        ...prev,
-        profile: {
-          ...prev.profile,
-          ...formData
-        }
-      }))
+      setUserProfile(prev => prev ? { ...prev, ...formData } : null)
       
       toast({
         title: "Profile updated",
@@ -182,61 +200,48 @@ export default function ProfilePage() {
     }
   }
 
-  const handleToggleNotification = async (key: string) => {
+  const handleSaveNotifications = async () => {
     try {
-      const updatedPreferences = {
-        ...userData.notifications,
-        [key]: !userData.notifications[key as keyof typeof userData.notifications]
-      }
-      
-      // Update via API
-      await updateNotificationPreferences(updatedPreferences)
-      
-      // Update local state
-      setUserData(prev => ({
-        ...prev,
-        notifications: updatedPreferences
-      }))
-      
+      await updateNotificationPreferences(notificationPrefs)
+
       toast({
-        title: "Preferences updated",
+        title: "Notifications updated",
         description: "Your notification preferences have been updated.",
       })
     } catch (error) {
-      console.error("Failed to update notification preferences:", error)
+      console.error("Failed to update notifications:", error)
       toast({
         title: "Error",
-        description: "Failed to update preferences. Please try again.",
+        description: "Failed to update notification preferences.",
         variant: "destructive",
       })
     }
   }
 
-  const handleToggleSecurity = async (key: string) => {
+  const handleSaveSecurity = async () => {
     try {
-      const updatedSettings = {
-        ...userData.security,
-        [key]: !userData.security[key as keyof typeof userData.security]
-      }
-      
-      // Update via API
-      await updateSecuritySettings(updatedSettings)
-      
-      // Update local state
-      setUserData(prev => ({
-        ...prev,
-        security: updatedSettings
-      }))
-      
+      await updateSecuritySettings({
+        securitySettings,
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword
+      })
+
       toast({
         title: "Security settings updated",
-        description: "Your security settings have been updated.",
+        description: "Your security settings have been updated successfully.",
+      })
+
+      // Clear password fields
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: ""
       })
     } catch (error) {
-      console.error("Failed to update security settings:", error)
+      console.error("Failed to update security:", error)
       toast({
         title: "Error",
-        description: "Failed to update security settings. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to update security settings.",
         variant: "destructive",
       })
     }
@@ -245,7 +250,6 @@ export default function ProfilePage() {
   const handleLogout = async () => {
     try {
       await logout()
-      window.location.href = "/login"
     } catch (error) {
       console.error("Failed to logout:", error)
       toast({
@@ -257,7 +261,7 @@ export default function ProfilePage() {
   }
 
   const getVerificationStatusBadge = (status: string) => {
-    switch (status.toLowerCase()) {
+    switch (status?.toLowerCase()) {
       case "verified":
         return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">Verified</Badge>
       case "pending":
@@ -285,6 +289,19 @@ export default function ProfilePage() {
     )
   }
 
+  if (!userProfile) {
+    return (
+      <div className="container py-10">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-2">Profile Not Found</h2>
+          <p className="text-muted-foreground mb-4">Unable to load your profile information.</p>
+          <Button onClick={() => window.location.reload()}>Try Again</Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="container py-6 space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -297,7 +314,7 @@ export default function ProfilePage() {
         </Button>
       </div>
 
-      <Tabs defaultValue="profile" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="profile" className="flex items-center">
             <User className="h-4 w-4 mr-2" /> Profile
@@ -308,9 +325,6 @@ export default function ProfilePage() {
           <TabsTrigger value="security" className="flex items-center">
             <Shield className="h-4 w-4 mr-2" /> Security
           </TabsTrigger>
-          <TabsTrigger value="payment" className="flex items-center">
-            <CreditCard className="h-4 w-4 mr-2" /> Payment Methods
-          </TabsTrigger>
         </TabsList>
         
         {/* Profile Tab */}
@@ -320,15 +334,15 @@ export default function ProfilePage() {
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="flex items-center gap-4">
                   <Avatar className="h-20 w-20">
-                    <AvatarImage src={userData.profile.avatar} alt={userData.profile.name} />
-                    <AvatarFallback>{userData.profile.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                    <AvatarImage src={userProfile.avatar} alt={userProfile.name} />
+                    <AvatarFallback>{userProfile.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <CardTitle className="text-xl">{userData.profile.name}</CardTitle>
+                    <CardTitle className="text-xl">{userProfile.name}</CardTitle>
                     <div className="flex items-center mt-1">
-                      {getVerificationStatusBadge(userData.profile.verificationStatus)}
+                      {getVerificationStatusBadge(userProfile.verificationStatus)}
                       <span className="text-sm text-muted-foreground ml-2">
-                        Member since {new Date(userData.profile.joinDate).toLocaleDateString()}
+                        Member since {new Date(userProfile.createdAt || new Date()).toLocaleDateString()}
                       </span>
                     </div>
                   </div>
@@ -337,8 +351,12 @@ export default function ProfilePage() {
                   <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>
                 ) : (
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
-                    <Button onClick={handleSaveProfile}>Save Changes</Button>
+                    <Button variant="outline" onClick={() => setIsEditing(false)}>
+                      <X className="mr-2 h-4 w-4" /> Cancel
+                    </Button>
+                    <Button onClick={handleSaveProfile}>
+                      <Save className="mr-2 h-4 w-4" /> Save Changes
+                    </Button>
                   </div>
                 )}
               </div>
@@ -351,27 +369,27 @@ export default function ProfilePage() {
                       <div className="text-sm text-muted-foreground">Email</div>
                       <div className="flex items-center">
                         <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <span>{userData.profile.email}</span>
+                        <span>{userProfile.email}</span>
                       </div>
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">Phone</div>
                       <div className="flex items-center">
                         <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <span>{userData.profile.phone}</span>
+                        <span>{userProfile.phone || "Not provided"}</span>
                       </div>
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">Location</div>
                       <div className="flex items-center">
                         <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <span>{userData.profile.location}</span>
+                        <span>{userProfile.location || "Not provided"}</span>
                       </div>
                     </div>
                   </div>
                   <div>
                     <div className="text-sm text-muted-foreground mb-2">Bio</div>
-                    <p>{userData.profile.bio}</p>
+                    <p>{userProfile.bio || "No bio provided"}</p>
                   </div>
                 </div>
               ) : (
@@ -425,416 +443,260 @@ export default function ProfilePage() {
                       onChange={handleInputChange}
                     ></textarea>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="avatar">Profile Picture</Label>
-                    <div className="flex items-center gap-4">
-                      <Avatar className="h-16 w-16">
-                        <AvatarImage src={userData.profile.avatar} alt={userData.profile.name} />
-                        <AvatarFallback>{userData.profile.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                      </Avatar>
-                      <Button variant="outline" size="sm">
-                        <Camera className="h-4 w-4 mr-2" /> Change Photo
-                      </Button>
-                    </div>
-                  </div>
                 </div>
               )}
               
               <Separator />
               
-              <div>
-                <h3 className="text-lg font-medium mb-4">Account Statistics</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="text-2xl font-bold">{userData.stats.chamasJoined}</div>
-                      <div className="text-sm text-muted-foreground">Chamas Joined</div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="text-2xl font-bold">
-                        {new Intl.NumberFormat('en-KE', { 
-                          style: 'currency', 
-                          currency: userData.stats.currency,
-                          maximumFractionDigits: 0
-                        }).format(userData.stats.totalSavings)}
-                      </div>
-                      <div className="text-sm text-muted-foreground">Total Savings</div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="text-2xl font-bold">
-                        {new Intl.NumberFormat('en-KE', { 
-                          style: 'currency', 
-                          currency: userData.stats.currency,
-                          maximumFractionDigits: 0
-                        }).format(userData.stats.totalInvestments)}
-                      </div>
-                      <div className="text-sm text-muted-foreground">Investments</div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="text-2xl font-bold">{userData.stats.activeLoans}</div>
-                      <div className="text-sm text-muted-foreground">Active Loans</div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-              
-              <Separator />
-              
-              <div>
-                <h3 className="text-lg font-medium mb-4">Verification Documents</h3>
-                <div className="space-y-4">
-                  {userData.verificationDocuments.map((doc: any, index: number) => (
-                    <div key={index} className="flex justify-between items-center p-4 border rounded-lg">
-                      <div>
-                        <div className="font-medium">{doc.type}</div>
-                        <div className="text-sm text-muted-foreground">
-                          Submitted: {new Date(doc.dateSubmitted).toLocaleDateString()}
+              {userStats && (
+                <div>
+                  <h3 className="text-lg font-medium mb-4">Account Statistics</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold">{userStats.chamasJoined}</div>
+                        <div className="text-sm text-muted-foreground">Chamas Joined</div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold">
+                          {new Intl.NumberFormat('en-KE', { 
+                            style: 'currency', 
+                            currency: userStats.currency,
+                            maximumFractionDigits: 0
+                          }).format(userStats.totalSavings)}
                         </div>
-                      </div>
-                      <div className="flex items-center">
-                        {getVerificationStatusBadge(doc.status)}
-                        {doc.status === "verified" && (
-                          <div className="text-sm text-muted-foreground ml-2">
-                            Verified on {new Date(doc.dateVerified).toLocaleDateString()}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  <Button variant="outline" className="w-full">
-                    <Camera className="h-4 w-4 mr-2" /> Upload New Document
-                  </Button>
+                        <div className="text-sm text-muted-foreground">Total Savings</div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold">
+                          {new Intl.NumberFormat('en-KE', { 
+                            style: 'currency', 
+                            currency: userStats.currency,
+                            maximumFractionDigits: 0
+                          }).format(userStats.totalInvestments)}
+                        </div>
+                        <div className="text-sm text-muted-foreground">Investments</div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold">{userStats.activeLoans}</div>
+                        <div className="text-sm text-muted-foreground">Active Loans</div>
+                      </CardContent>
+                    </Card>
+                  </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
         
         {/* Notifications Tab */}
-        <TabsContent value="notifications" className="space-y-4">
+        <TabsContent value="notifications">
           <Card>
             <CardHeader>
               <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>Manage how you receive notifications and updates</CardDescription>
+              <CardDescription>
+                Manage how you receive notifications from PochiYangu
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div>
-                <h3 className="text-lg font-medium mb-4">Notification Channels</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="email-notifications">Email Notifications</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Receive notifications via email
-                      </div>
-                    </div>
-                    <Switch 
-                      id="email-notifications" 
-                      checked={userData.notifications.email}
-                      onCheckedChange={() => handleToggleNotification('email')}
-                    />
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="email-notifications">Email Notifications</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Receive important updates via email
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="push-notifications">Push Notifications</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Receive notifications on your device
-                      </div>
-                    </div>
-                    <Switch 
-                      id="push-notifications" 
-                      checked={userData.notifications.push}
-                      onCheckedChange={() => handleToggleNotification('push')}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="sms-notifications">SMS Notifications</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Receive notifications via SMS
-                      </div>
-                    </div>
-                    <Switch 
-                      id="sms-notifications" 
-                      checked={userData.notifications.sms}
-                      onCheckedChange={() => handleToggleNotification('sms')}
-                    />
-                  </div>
+                  <Switch
+                    id="email-notifications"
+                    checked={notificationPrefs.emailNotifications}
+                    onCheckedChange={() => handleNotificationChange("emailNotifications")}
+                  />
                 </div>
-              </div>
-              
-              <Separator />
-              
-              <div>
-                <h3 className="text-lg font-medium mb-4">Notification Types</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="chama-updates">Chama Updates</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Updates about your chama activities and events
-                      </div>
-                    </div>
-                    <Switch 
-                      id="chama-updates" 
-                      checked={userData.notifications.chamaUpdates}
-                      onCheckedChange={() => handleToggleNotification('chamaUpdates')}
-                    />
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="push-notifications">Push Notifications</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Receive push notifications on your device
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="transaction-alerts">Transaction Alerts</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Notifications about deposits, withdrawals, and transfers
-                      </div>
-                    </div>
-                    <Switch 
-                      id="transaction-alerts" 
-                      checked={userData.notifications.transactionAlerts}
-                      onCheckedChange={() => handleToggleNotification('transactionAlerts')}
-                    />
+                  <Switch
+                    id="push-notifications"
+                    checked={notificationPrefs.pushNotifications}
+                    onCheckedChange={() => handleNotificationChange("pushNotifications")}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="sms-notifications">SMS Notifications</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Receive SMS alerts (carrier charges may apply)
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="investment-updates">Investment Updates</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Updates about your investment performance and opportunities
-                      </div>
-                    </div>
-                    <Switch 
-                      id="investment-updates" 
-                      checked={userData.notifications.investmentUpdates}
-                      onCheckedChange={() => handleToggleNotification('investmentUpdates')}
-                    />
+                  <Switch
+                    id="sms-notifications"
+                    checked={notificationPrefs.smsNotifications}
+                    onCheckedChange={() => handleNotificationChange("smsNotifications")}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="chama-updates">Chama Updates</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Notifications about your chama activities
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="loan-reminders">Loan Reminders</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Reminders about loan payments and updates
-                      </div>
-                    </div>
-                    <Switch 
-                      id="loan-reminders" 
-                      checked={userData.notifications.loanReminders}
-                      onCheckedChange={() => handleToggleNotification('loanReminders')}
-                    />
+                  <Switch
+                    id="chama-updates"
+                    checked={notificationPrefs.chamaUpdates}
+                    onCheckedChange={() => handleNotificationChange("chamaUpdates")}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="payment-reminders">Payment Reminders</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Reminders for upcoming payments and contributions
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="marketing">Marketing Communications</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Promotional offers and new feature announcements
-                      </div>
-                    </div>
-                    <Switch 
-                      id="marketing" 
-                      checked={userData.notifications.marketing}
-                      onCheckedChange={() => handleToggleNotification('marketing')}
-                    />
+                  <Switch
+                    id="payment-reminders"
+                    checked={notificationPrefs.paymentReminders}
+                    onCheckedChange={() => handleNotificationChange("paymentReminders")}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="security-alerts">Security Alerts</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Important alerts about your account security
+                    </p>
                   </div>
+                  <Switch
+                    id="security-alerts"
+                    checked={notificationPrefs.securityAlerts}
+                    onCheckedChange={() => handleNotificationChange("securityAlerts")}
+                  />
                 </div>
               </div>
             </CardContent>
             <CardFooter>
-              <Button className="w-full">Save Notification Preferences</Button>
+              <Button onClick={handleSaveNotifications}>
+                <Save className="mr-2 h-4 w-4" /> Save Preferences
+              </Button>
             </CardFooter>
           </Card>
         </TabsContent>
         
         {/* Security Tab */}
-        <TabsContent value="security" className="space-y-4">
+        <TabsContent value="security">
           <Card>
             <CardHeader>
               <CardTitle>Security Settings</CardTitle>
-              <CardDescription>Manage your account security and authentication options</CardDescription>
+              <CardDescription>
+                Manage your account security and password settings
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="two-factor">Two-Factor Authentication</Label>
-                    <div className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       Add an extra layer of security to your account
-                    </div>
+                    </p>
                   </div>
-                  <Switch 
-                    id="two-factor" 
-                    checked={userData.security.twoFactorEnabled}
-                    onCheckedChange={() => handleToggleSecurity('twoFactorEnabled')}
+                  <Switch
+                    id="two-factor"
+                    checked={securitySettings.twoFactorEnabled}
+                    onCheckedChange={(checked) => handleSecurityChange("twoFactorEnabled", checked)}
                   />
                 </div>
+
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="login-alerts">Login Alerts</Label>
-                    <div className="text-sm text-muted-foreground">
-                      Receive notifications when your account is accessed
-                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Get notified when someone logs into your account
+                    </p>
                   </div>
-                  <Switch 
-                    id="login-alerts" 
-                    checked={userData.security.loginAlerts}
-                    onCheckedChange={() => handleToggleSecurity('loginAlerts')}
+                  <Switch
+                    id="login-alerts"
+                    checked={securitySettings.loginAlerts}
+                    onCheckedChange={(checked) => handleSecurityChange("loginAlerts", checked)}
                   />
                 </div>
+
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label htmlFor="transaction-pin">Transaction PIN</Label>
-                    <div className="text-sm text-muted-foreground">
-                      Require PIN for all financial transactions
-                    </div>
+                    <Label htmlFor="session-timeout">Session Timeout (hours)</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Automatically log out after a period of inactivity
+                    </p>
                   </div>
-                  <Switch 
-                    id="transaction-pin" 
-                    checked={userData.security.transactionPinEnabled}
-                    onCheckedChange={() => handleToggleSecurity('transactionPinEnabled')}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="biometric">Biometric Authentication</Label>
-                    <div className="text-sm text-muted-foreground">
-                      Use fingerprint or face recognition to access your account
-                    </div>
-                  </div>
-                  <Switch 
-                    id="biometric" 
-                    checked={userData.security.biometricEnabled}
-                    onCheckedChange={() => handleToggleSecurity('biometricEnabled')}
+                  <Input
+                    id="session-timeout"
+                    type="number"
+                    min="1"
+                    max="72"
+                    className="w-20"
+                    value={securitySettings.sessionTimeout}
+                    onChange={(e) => handleSecurityChange("sessionTimeout", parseInt(e.target.value))}
                   />
                 </div>
               </div>
-              
+
               <Separator />
-              
-              <div>
-                <h3 className="text-lg font-medium mb-4">Password Management</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <div className="font-medium">Password</div>
-                      <div className="text-sm text-muted-foreground">
-                        Last changed: {new Date(userData.security.lastPasswordChange).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <Button variant="outline">Change Password</Button>
-                  </div>
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <div className="font-medium">Transaction PIN</div>
-                      <div className="text-sm text-muted-foreground">
-                        Used for authorizing financial transactions
-                      </div>
-                    </div>
-                    <Button variant="outline">Change PIN</Button>
-                  </div>
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Change Password</h3>
+                <div className="space-y-2">
+                  <Label htmlFor="current-password">Current Password</Label>
+                  <Input
+                    id="current-password"
+                    name="currentPassword"
+                    type="password"
+                    value={passwordData.currentPassword}
+                    onChange={handlePasswordChange}
+                  />
                 </div>
-              </div>
-              
-              <Separator />
-              
-              <div>
-                <h3 className="text-lg font-medium mb-4">Session Management</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <div className="font-medium">Active Sessions</div>
-                      <div className="text-sm text-muted-foreground">
-                        Manage devices where you're currently logged in
-                      </div>
-                    </div>
-                    <Button variant="outline">View Sessions</Button>
-                  </div>
-                  <Button variant="destructive" className="w-full" onClick={handleLogout}>
-                    <LogOut className="mr-2 h-4 w-4" /> Log Out of All Devices
-                  </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="new-password">New Password</Label>
+                  <Input
+                    id="new-password"
+                    name="newPassword"
+                    type="password"
+                    value={passwordData.newPassword}
+                    onChange={handlePasswordChange}
+                  />
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        {/* Payment Methods Tab */}
-        <TabsContent value="payment" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment Methods</CardTitle>
-              <CardDescription>Manage your payment and withdrawal options</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <h3 className="text-lg font-medium mb-4">Saved Payment Methods</h3>
-                <div className="space-y-4">
-                  {userData.paymentMethods.map((method: any) => (
-                    <div key={method.id} className="flex justify-between items-center p-4 border rounded-lg">
-                      <div className="flex items-center">
-                        {method.type === "M-Pesa" ? (
-                          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mr-4">
-                            <Phone className="h-5 w-5 text-green-600" />
-                          </div>
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-4">
-                            <CreditCard className="h-5 w-5 text-blue-600" />
-                          </div>
-                        )}
-                        <div>
-                          <div className="font-medium">{method.type}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {method.number}
-                            {method.bank && ` • ${method.bank}`}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center">
-                        {method.isDefault && (
-                          <Badge className="mr-2 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                            Default
-                          </Badge>
-                        )}
-                        <Button variant="ghost" size="sm">Edit</Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <Button className="w-full mt-4">
-                  <CreditCard className="mr-2 h-4 w-4" /> Add Payment Method
-                </Button>
-              </div>
-              
-              <Separator />
-              
-              <div>
-                <h3 className="text-lg font-medium mb-4">Auto-Payment Settings</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="auto-chama">Automatic Chama Contributions</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Automatically pay your chama contributions when due
-                      </div>
-                    </div>
-                    <Switch id="auto-chama" />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="auto-loan">Automatic Loan Repayments</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Automatically pay your loan installments when due
-                      </div>
-                    </div>
-                    <Switch id="auto-loan" />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password">Confirm New Password</Label>
+                  <Input
+                    id="confirm-password"
+                    name="confirmPassword"
+                    type="password"
+                    value={passwordData.confirmPassword}
+                    onChange={handlePasswordChange}
+                  />
                 </div>
               </div>
             </CardContent>
             <CardFooter>
-              <Button className="w-full">Save Payment Settings</Button>
+              <Button onClick={handleSaveSecurity}>
+                <Save className="mr-2 h-4 w-4" /> Save Security Settings
+              </Button>
             </CardFooter>
           </Card>
         </TabsContent>
@@ -842,4 +704,3 @@ export default function ProfilePage() {
     </div>
   )
 }
-

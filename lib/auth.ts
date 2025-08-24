@@ -160,6 +160,33 @@ export async function getToken(): Promise<string | null> {
   }
 }
 
+export async function getUserProfile(): Promise<AuthUser | null> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return null;
+    }
+
+    // Fetch additional profile data if needed
+    const client = await clientPromise;
+    const db = client.db("pochiyangu");
+    
+    const userData = await db.collection("users").findOne({ 
+      _id: new ObjectId(user._id) 
+    });
+
+    if (!userData) {
+      return null;
+    }
+
+    const { password, ...userWithoutPassword } = userData;
+    return { ...userWithoutPassword, _id: user._id.toString() };
+  } catch (error) {
+    console.error("Failed to fetch user profile:", error);
+    return null;
+  }
+}
+
 // Helper functions
 async function setAuthCookie(token: string, rememberMe: boolean = false): Promise<void> {
   const isProduction = process.env.NODE_ENV === "production";
