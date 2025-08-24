@@ -130,21 +130,31 @@ export default function ChamaHubPage() {
     }
   }
 
-  async function handleJoinChama(chamaId: string) {
-    try {
-      await joinChama(chamaId)
+  async function handleJoinChama(chama: PublicChama) {
+  try {
+    if (chama.type === "private") {
+      // For private chamas, send a join request
+      await requestToJoinChama(chama.id, "I would like to join your chama");
       toast({
         title: "Join request sent",
-        description: "Your request to join this chama has been sent to the admins.",
-      })
-    } catch (error) {
+        description: "Your request to join this private chama has been sent to the admins for approval.",
+      });
+    } else {
+      // For public chamas, join directly
+      await joinChama(chama.id);
       toast({
-        title: "Error",
-        description: "Failed to send join request. Please try again.",
-        variant: "destructive",
-      })
+        title: "Joined chama",
+        description: "You have successfully joined the public chama.",
+      });
     }
+  } catch (error) {
+    toast({
+      title: "Error",
+      description: error instanceof Error ? error.message : "Failed to join chama. Please try again.",
+      variant: "destructive",
+    });
   }
+}
 
   const filteredPublicChamas = publicChamas.filter((chama) =>
     chama.name.toLowerCase().includes(searchQuery.toLowerCase()),

@@ -140,6 +140,40 @@ export async function findPublicChamas(): Promise<Chama[]> {
   return db.collection(COLLECTIONS.CHAMAS).find({ type: "public" }).toArray()
 }
 
+export async function addMemberToChama(chamaId: string, userId: string, userName: string, userAvatar?: string) {
+  const { db } = await connectToDatabase();
+  if (!db) throw new Error("Database connection failed");
+
+  const result = await db.collection("chamas").updateOne(
+    { _id: new ObjectId(chamaId) },
+    {
+      $push: {
+        members: {
+          userId: new ObjectId(userId),
+          name: userName,
+          avatar: userAvatar,
+          role: "member",
+          joinDate: new Date()
+        }
+      },
+      $inc: { memberCount: 1 }
+    }
+  );
+
+  return result;
+}
+
+export async function getJoinRequestById(requestId: string) {
+  const { db } = await connectToDatabase();
+  if (!db) throw new Error("Database connection failed");
+
+  const request = await db.collection("join_requests").findOne({
+    _id: new ObjectId(requestId)
+  });
+
+  return request;
+}
+
 // Transaction functions
 export async function createTransaction(
   transactionData: Omit<Transaction, "_id">

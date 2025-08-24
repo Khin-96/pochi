@@ -39,14 +39,19 @@ import {
   fetchChamaAdminData,
   addCoAdmin,
   removeCoAdmin,
+  fetchJoinRequests,
   approveJoinRequest,
   rejectJoinRequest,
+  JoinRequest,
   toggleChamaVisibility,
   generateInviteLink,
   downloadReceipt,
 } from "@/lib/api"
 import { formatDate } from "@/lib/utils"
 import AdminSkeleton from "@/components/admin-skeleton"
+
+
+const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
 
 const addAdminSchema = z.object({
   email: z.string().email({
@@ -123,6 +128,22 @@ export default function AdminPage() {
     loadData()
   }, [chamaId, toast, router])
 
+useEffect(() => {
+  const loadJoinRequests = async () => {
+    if (adminData && activeTab === "members") {
+      try {
+        const requests = await fetchJoinRequests(chamaId);
+        setJoinRequests(requests);
+      } catch (error) {
+        console.error("Failed to fetch join requests:", error);
+      }
+    }
+  };
+  
+  loadJoinRequests();
+}, [chamaId, adminData, activeTab]);
+
+
   async function onSubmitAddAdmin(values: z.infer<typeof addAdminSchema>) {
     setIsAddingAdmin(true)
     try {
@@ -180,6 +201,54 @@ export default function AdminPage() {
       setIsRemovingAdmin(false)
     }
   }
+
+async function handleApproveRequest(requestId: string) {
+  try {
+    await approveJoinRequest(chamaId, requestId);
+    setJoinRequests(prev => prev.filter(req => req.id !== requestId));
+    
+    // Update the pending requests count in adminData
+    setAdminData(prev => prev ? {
+      ...prev,
+      pendingRequests: (prev.pendingRequests || 1) - 1
+    } : null);
+    
+    toast({
+      title: "Request approved",
+      description: "The user has been added to the chama.",
+    });
+  } catch (error) {
+    toast({
+      title: "Error",
+      description: "Failed to approve request. Please try again.",
+      variant: "destructive",
+    });
+  }
+}
+
+ async function handleRejectRequest(requestId: string) {
+  try {
+    await rejectJoinRequest(chamaId, requestId);
+    setJoinRequests(prev => prev.filter(req => req.id !== requestId));
+    
+    // Update the pending requests count in adminData
+    setAdminData(prev => prev ? {
+      ...prev,
+      pendingRequests: (prev.pendingRequests || 1) - 1
+    } : null);
+    
+    toast({
+      title: "Request rejected",
+      description: "The join request has been rejected.",
+    });
+  } catch (error) {
+    toast({
+      title: "Error",
+      description: "Failed to reject request. Please try again.",
+      variant: "destructive",
+    });
+  }
+}
 
   async function handleApproveRequest(requestId: string) {
     try {

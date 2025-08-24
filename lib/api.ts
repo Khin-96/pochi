@@ -36,17 +36,34 @@ export async function login(credentials: any) {
   return response.json();
 }
 
-export async function logout() {
-  const response = await fetch("/api/auth/logout", {
-    method: "POST",
-  });
+export async function logout(): Promise<{ message: string }> {
+  try {
+    const response = await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: 'include',
+    });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || "Failed to logout");
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to logout");
+    }
+
+    // Clear any client-side storage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('user');
+      sessionStorage.removeItem('user');
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error("Logout error:", error);
+    // Even if the server request fails, clear client-side state
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('user');
+      sessionStorage.removeItem('user');
+    }
+    throw error;
   }
-
-  return response.json();
 }
 
 export async function getCurrentUser(): Promise<User | null> {
@@ -81,7 +98,6 @@ export async function getCurrentUser(): Promise<User | null> {
     return null;
   }
 }
-
 
 export async function forgotPassword(email: string) {
   const response = await fetch("/api/auth/forgot-password", {
@@ -519,6 +535,67 @@ export async function removeCoAdmin(chamaId: string, adminId: string) {
   return response.json();
 }
 
+export async function toggleChamaVisibility(chamaId: string, newType: "private" | "public") {
+  const response = await fetch(`/api/chamas/${chamaId}/visibility`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: 'include',
+    body: JSON.stringify({ type: newType }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to update visibility");
+  }
+
+  return response.json();
+}
+
+// Chama functions - Add these to your existing chama functions
+export async function requestToJoinChama(chamaId: string, reason?: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/join-request`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: 'include',
+    body: JSON.stringify({ reason }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Failed to send join request");
+  }
+
+  return response.json();
+}
+
+export async function fetchJoinRequests(chamaId: string) {
+  const response = await fetch(`/api/chamas/${chamaId}/join-requests`, {
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch join requests");
+  }
+
+  const data = await response.json();
+  return data.requests;
+}
+
+// Add this interface to your existing interfaces
+export interface JoinRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requestDate: string;
+}
+
 export async function approveJoinRequest(chamaId: string, requestId: string) {
   const response = await fetch(`/api/chamas/${chamaId}/join-requests/${requestId}/approve`, {
     method: "POST",
@@ -542,24 +619,6 @@ export async function rejectJoinRequest(chamaId: string, requestId: string) {
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.message || "Failed to reject join request");
-  }
-
-  return response.json();
-}
-
-export async function toggleChamaVisibility(chamaId: string, newType: "private" | "public") {
-  const response = await fetch(`/api/chamas/${chamaId}/visibility`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    credentials: 'include',
-    body: JSON.stringify({ type: newType }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || "Failed to update visibility");
   }
 
   return response.json();
